@@ -13,7 +13,7 @@ class GameRoom {
   }
 
   _makePlayer(id, name, spotifyId) {
-    return { id, name, spotifyId, tokens: 0, timeline: [], connected: true };
+    return { id, name, spotifyId, tokens: 2, timeline: [], connected: true };
   }
 
   getPlayer(id) {
@@ -84,6 +84,17 @@ class GameRoom {
     if (this.phase !== 'playing') throw new Error('Cannot place now');
     this.activePlayerPlacement = position;
     this.phase = 'placed';
+  }
+
+  skipCard(playerId) {
+    if (this.getCurrentPlayer()?.id !== playerId) throw new Error('Not your turn');
+    if (this.phase !== 'playing') throw new Error('You can only skip before placing');
+    const player = this.getPlayer(playerId);
+    if (!player || player.tokens <= 0) throw new Error('No tokens left to skip');
+    player.tokens--;
+    // Send the skipped song to the bottom of the deck and draw a fresh one
+    this.deck.unshift(this.currentCard);
+    this._drawCard();
   }
 
   placeToken(playerId, position) {

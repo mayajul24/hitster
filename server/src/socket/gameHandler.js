@@ -64,6 +64,17 @@ module.exports = function gameHandler(io, socket) {
     }
   });
 
+  socket.on('skip_card', ({ roomCode }) => {
+    const room = getRoom(roomCode);
+    if (!room) return emit('error', { message: 'Room not found' });
+    try {
+      room.skipCard(socket.id);
+      broadcast(room.code, 'state_update', { state: room.publicState() });
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+
   socket.on('place_token', ({ roomCode, position }) => {
     const room = getRoom(roomCode);
     if (!room) return emit('error', { message: 'Room not found' });

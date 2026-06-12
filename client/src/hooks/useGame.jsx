@@ -76,6 +76,10 @@ export function GameProvider({ children }) {
     socket.emit('place_card', { roomCode, position });
   }, [roomCode]);
 
+  const skipCard = useCallback(() => {
+    socket.emit('skip_card', { roomCode });
+  }, [roomCode]);
+
   const placeToken = useCallback((position) => {
     socket.emit('place_token', { roomCode, position });
   }, [roomCode]);
@@ -109,6 +113,7 @@ export function GameProvider({ children }) {
         setPlaylist,
         startGame,
         placeCard,
+        skipCard,
         placeToken,
         reveal,
         nextTurn,

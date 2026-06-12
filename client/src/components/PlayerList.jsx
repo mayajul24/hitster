@@ -29,6 +29,23 @@ export default function PlayerList({ players, currentPlayerId, myId }) {
             <p className={`text-xs ${isActive ? 'text-black/60' : 'text-white/40'}`}>
               {n} card{n === 1 ? '' : 's'}
             </p>
+            {/* Skip tokens */}
+            <div className="flex justify-center gap-1 mt-1">
+              {Array.from({ length: Math.max(2, p.tokens) }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full border transition-colors ${
+                    i < p.tokens
+                      ? isActive
+                        ? 'bg-black border-black'
+                        : 'bg-hitster-yellow border-hitster-yellow'
+                      : isActive
+                      ? 'border-black/30'
+                      : 'border-white/25'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         );
       })}

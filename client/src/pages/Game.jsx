@@ -28,6 +28,7 @@ export default function Game() {
     gameOver,
     error,
     placeCard,
+    skipCard,
     reveal,
     nextTurn,
   } = useGame();
@@ -163,6 +164,19 @@ export default function Game() {
                 onPlace={placeCard}
                 selectedPosition={isPlaced ? activePlayerPlacement : null}
               />
+              {!isPlaced && (
+                <button
+                  onClick={skipCard}
+                  disabled={!myPlayer || myPlayer.tokens <= 0}
+                  className="w-full bg-white/10 text-white/80 text-sm font-semibold py-2.5 rounded-xl active:opacity-80 disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  Skip this song
+                  <span className="w-2.5 h-2.5 rounded-full bg-hitster-yellow inline-block" />
+                  <span className="text-white/50">
+                    1 token · {myPlayer?.tokens ?? 0} left
+                  </span>
+                </button>
+              )}
             </div>
           </DndContext>
         )}
@@ -233,12 +247,12 @@ function DraggableSong() {
       style={style}
       {...listeners}
       {...attributes}
-      className={`w-28 h-28 mx-auto rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+      className={`w-20 h-24 mx-auto rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
         isDragging ? 'opacity-80 shadow-2xl' : ''
       }`}
     >
-      <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
-      <span className="text-hitster-yellow text-[11px] mt-1 font-semibold">Drag me</span>
+      <span className="text-3xl text-hitster-yellow font-black leading-none">?</span>
+      <span className="text-hitster-yellow text-[10px] mt-1 font-semibold">Drag me</span>
     </div>
   );
 }

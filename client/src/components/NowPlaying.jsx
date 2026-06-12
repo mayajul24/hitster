@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSpotify } from '../hooks/useSpotify.jsx';
 import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
 
-// The mystery song that's currently playing — no details shown, only audio.
+// Slim now-playing bar for the hidden mystery song — audio control only, not a card.
 export default function NowPlaying({ card }) {
   const { getToken } = useSpotify();
   const [playing, setPlaying] = useState(false);
@@ -39,40 +39,30 @@ export default function NowPlaying({ card }) {
   };
 
   return (
-    <div className="bg-hitster-card rounded-2xl p-4 space-y-3 border border-white/10">
-      <div className="flex items-center gap-3">
-        <div className="w-14 h-14 rounded-xl bg-hitster-yellow/15 border border-hitster-yellow/40 flex items-center justify-center text-3xl text-hitster-yellow font-black">
-          ?
-        </div>
+    <div className="space-y-1">
+      <div className="flex items-center gap-3 bg-white/5 rounded-full pl-2 pr-4 py-2 border border-white/10">
+        <button
+          onClick={playing ? handlePause : handlePlay}
+          disabled={loading}
+          aria-label={playing ? 'Pause' : 'Play'}
+          className="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center flex-shrink-0 active:opacity-80 disabled:opacity-50"
+        >
+          {loading ? (
+            <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span className="text-lg leading-none">{playing ? '⏸' : '▶'}</span>
+          )}
+        </button>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">Mystery song</p>
-          <p className="text-white/50 text-xs">Listen and guess when it came out</p>
+          <p className="text-sm font-semibold leading-tight">Mystery song</p>
+          <p className="text-white/40 text-xs leading-tight">Listen &amp; place it — tap to replay</p>
         </div>
       </div>
-
       {deviceError && (
-        <p className="text-hitster-accent text-xs">
+        <p className="text-hitster-accent text-xs px-3">
           Open the Spotify app on your device first, then tap play.
         </p>
       )}
-
-      <button
-        onClick={playing ? handlePause : handlePlay}
-        disabled={loading}
-        className="w-full bg-[#1DB954] text-black font-bold py-3 rounded-xl text-sm active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {loading ? (
-          <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-        ) : playing ? (
-          <>
-            <span className="text-lg">⏸</span> Pause
-          </>
-        ) : (
-          <>
-            <span className="text-lg">▶</span> Replay song
-          </>
-        )}
-      </button>
     </div>
   );
 }
