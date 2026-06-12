@@ -1,18 +1,17 @@
 import { useDroppable } from '@dnd-kit/core';
 
 // Horizontal timeline of song cards, oldest -> newest left to right.
-// placing          — when true, renders drop targets (and tappable slots) between/around cards.
-// onPlace(position)— called when a slot is tapped (fallback to dragging).
-// selectedPosition — slot index the active player locked in (renders a mystery card there).
-export default function Timeline({ timeline, placing = false, onPlace, selectedPosition = null }) {
+// droppablePositions — array of slot indices that accept a drop / tap (or null).
+// onPlace(position)   — called when a droppable slot is tapped.
+// markers             — [{ position, kind: 'mystery'|'active'|'me'|'other', label }]
+//                       rendered as a "?" placeholder at that slot.
+export default function Timeline({ timeline, onPlace, droppablePositions = null, markers = [] }) {
   const items = [];
 
   for (let pos = 0; pos <= timeline.length; pos++) {
-    const selected = selectedPosition === pos;
+    const droppable = droppablePositions?.includes(pos);
 
-    if (selected) {
-      items.push(<MysteryCard key={`slot-${pos}`} />);
-    } else if (placing) {
+    if (droppable) {
       items.push(
         <DropSlot
           key={`slot-${pos}`}
@@ -21,6 +20,17 @@ export default function Timeline({ timeline, placing = false, onPlace, selectedP
           edge={pos === 0 ? 'before' : pos === timeline.length ? 'after' : null}
         />
       );
+    } else {
+      const here = markers.filter((m) => m.position === pos);
+      if (here.length) {
+        items.push(
+          <div key={`m-${pos}`} className="flex-shrink-0 flex flex-col gap-1 justify-center">
+            {here.map((m, i) => (
+              <Marker key={i} kind={m.kind} label={m.label} />
+            ))}
+          </div>
+        );
+      }
     }
 
     const card = timeline[pos];
@@ -52,6 +62,26 @@ function DropSlot({ pos, onPlace, edge }) {
   );
 }
 
+const MARKER_STYLES = {
+  mystery: 'border-hitster-yellow bg-hitster-yellow/15 text-hitster-yellow',
+  active: 'border-hitster-yellow bg-hitster-yellow/15 text-hitster-yellow',
+  me: 'border-hitster-accent bg-hitster-accent/20 text-hitster-accent',
+  other: 'border-white/30 bg-white/10 text-white/80',
+};
+
+function Marker({ kind, label }) {
+  return (
+    <div
+      className={`w-20 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 flex flex-col items-center justify-center ${
+        MARKER_STYLES[kind] || MARKER_STYLES.other
+      }`}
+    >
+      <span className="text-3xl font-black leading-none">?</span>
+      <span className="text-[10px] font-semibold mt-1 px-1 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
 function TimelineCard({ card }) {
   return (
     <div className="w-28 flex-shrink-0 rounded-xl overflow-hidden bg-hitster-card border border-white/10">
@@ -65,15 +95,6 @@ function TimelineCard({ card }) {
         <p className="text-white text-xs font-semibold truncate mt-1">{card.trackName}</p>
         <p className="text-white/50 text-[11px] truncate">{card.artist}</p>
       </div>
-    </div>
-  );
-}
-
-function MysteryCard() {
-  return (
-    <div className="w-28 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 flex flex-col items-center justify-center">
-      <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
-      <span className="text-hitster-yellow text-[11px] mt-1 font-semibold">Placed here</span>
     </div>
   );
 }

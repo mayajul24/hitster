@@ -17,6 +17,8 @@ import Timeline from '../components/Timeline.jsx';
 import PlayerList from '../components/PlayerList.jsx';
 import RevealResult from '../components/RevealResult.jsx';
 
+const range = (n) => Array.from({ length: n }, (_, i) => i);
+
 export default function Game() {
   useParams();
   const {
@@ -30,6 +32,7 @@ export default function Game() {
     error,
     placeCard,
     skipCard,
+    placeChallenge,
     reveal,
     nextTurn,
   } = useGame();
@@ -37,6 +40,7 @@ export default function Game() {
   const navigate = useNavigate();
 
   const [countdown, setCountdown] = useState(null);
+  const [challengeSecs, setChallengeSecs] = useState(0);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -45,6 +49,7 @@ export default function Game() {
 
   const phase = gameState?.phase;
   const trackId = gameState?.currentCard?.trackId;
+  const challengeDeadline = gameState?.challengeDeadline;
 
   // Auto-play the mystery track on this client's own Spotify device each new card
   useEffect(() => {
@@ -60,17 +65,27 @@ export default function Game() {
     })();
   }, [trackId]);
 
+  // Countdown for the challenge window (after a placement, before reveal)
+  useEffect(() => {
+    if (phase !== 'placed' || !challengeDeadline) {
+      setChallengeSecs(0);
+      return;
+    }
+    const update = () =>
+      setChallengeSecs(Math.max(0, Math.ceil((challengeDeadline - Date.now()) / 1000)));
+    update();
+    const iv = setInterval(update, 250);
+    return () => clearInterval(iv);
+  }, [phase, challengeDeadline]);
+
   // After a reveal, auto-advance to the next turn with a 3..2..1 countdown.
-  // The host fires the actual advance so it only happens once.
   useEffect(() => {
     if (phase !== 'revealing') {
       setCountdown(null);
       return;
     }
     setCountdown(3);
-    const tick = setInterval(() => {
-      setCountdown((c) => (c > 1 ? c - 1 : 0));
-    }, 1000);
+    const tick = setInterval(() => setCountdown((c) => (c > 1 ? c - 1 : 0)), 1000);
     const advance = isHost ? setTimeout(() => nextTurn(), 3000) : null;
     return () => {
       clearInterval(tick);
@@ -78,7 +93,7 @@ export default function Game() {
     };
   }, [phase, trackId, isHost]);
 
-  // Stop Spotify when the game ends (win, deck empty, or abandoned)
+  // Stop Spotify when the game ends
   useEffect(() => {
     if (!gameOver) return;
     (async () => {
@@ -89,9 +104,10 @@ export default function Game() {
   }, [gameOver]);
 
   const handleDragEnd = ({ over }) => {
-    if (over && typeof over.id === 'string' && over.id.startsWith('slot-')) {
-      placeCard(parseInt(over.id.slice(5), 10));
-    }
+    if (!over || typeof over.id !== 'string' || !over.id.startsWith('slot-')) return;
+    const pos = parseInt(over.id.slice(5), 10);
+    if (isMyTurn) placeCard(pos);
+    else placeChallenge(pos);
   };
 
   if (gameOver) {
@@ -140,11 +156,23 @@ export default function Game() {
     );
   }
 
-  const { currentCard, currentPlayerId, activePlayerPlacement, players } = gameState;
+  const { currentCard, currentPlayerId, activePlayerPlacement, challenges = {}, players } = gameState;
   const activePlayer = players.find((p) => p.id === currentPlayerId);
   const myTimeline = myPlayer?.timeline || [];
   const isRevealing = phase === 'revealing';
   const isPlaced = phase === 'placed';
+  const isPlaying = phase === 'playing';
+
+  const myChallenge = challenges[mySocketId];
+  const canChallenge =
+    !isMyTurn && isPlaced && challengeSecs > 0 && (myPlayer?.tokens ?? 0) > 0 && !myChallenge;
+
+  // Markers placed on the active player's timeline (their guess + challengers)
+  const challengerMarkers = Object.entries(challenges).map(([pid, ch]) => ({
+    position: ch.position,
+    kind: pid === mySocketId ? 'me' : 'other',
+    label: pid === mySocketId ? 'You' : players.find((p) => p.id === pid)?.name || '?',
+  }));
 
   return (
     <div className="min-h-screen bg-hitster-dark flex flex-col">
@@ -155,39 +183,49 @@ export default function Game() {
           </div>
         )}
 
-        {/* Players row */}
         <PlayerList players={players} currentPlayerId={currentPlayerId} myId={mySocketId} />
 
-        {/* Non-active players: slim mystery bar (audio only) */}
-        {currentCard && !isRevealing && !isMyTurn && <NowPlaying card={currentCard} />}
-
-        {/* Reveal result */}
+        {/* ===== REVEAL ===== */}
         {isRevealing && revealData && (
-          <RevealResult revealData={revealData} playerName={activePlayer?.name} isMe={isMyTurn} />
+          <>
+            <RevealResult revealData={revealData} players={players} />
+            {myTimeline.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-white/50 text-xs uppercase tracking-wider">Your timeline</p>
+                <Timeline timeline={myTimeline} />
+              </div>
+            )}
+          </>
         )}
 
-        {/* ACTIVE PLAYER: drag the Mystery Song bar onto your own timeline */}
+        {/* ===== ACTIVE PLAYER ===== */}
         {isMyTurn && !isRevealing && (
           <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
             <div className="space-y-3">
               {currentCard &&
-                (isPlaced ? (
-                  <NowPlaying card={currentCard} />
-                ) : (
+                (isPlaying ? (
                   <DraggableMystery card={currentCard} />
+                ) : (
+                  <NowPlaying card={currentCard} />
                 ))}
               <p className="text-white/50 text-xs uppercase tracking-wider">
                 {isPlaced
-                  ? 'Locked in — tap Reveal Year when ready'
+                  ? challengeSecs > 0
+                    ? `Locked in — others can challenge for ${challengeSecs}s`
+                    : 'Locked in — tap Reveal Year'
                   : 'Drag the Mystery Song onto your timeline (or tap a slot)'}
               </p>
               <Timeline
                 timeline={myTimeline}
-                placing={!isPlaced}
-                onPlace={placeCard}
-                selectedPosition={isPlaced ? activePlayerPlacement : null}
+                onPlace={isPlaying ? placeCard : undefined}
+                droppablePositions={isPlaying ? range(myTimeline.length + 1) : null}
+                markers={
+                  isPlaced
+                    ? [{ position: activePlayerPlacement, kind: 'mystery', label: 'You' }, ...challengerMarkers]
+                    : []
+                }
               />
-              {!isPlaced && (
+              {isPlaying && (
                 <button
                   onClick={skipCard}
                   disabled={!myPlayer || myPlayer.tokens <= 0}
@@ -195,34 +233,63 @@ export default function Game() {
                 >
                   Skip this song
                   <span className="w-2.5 h-2.5 rounded-full bg-hitster-yellow inline-block" />
-                  <span className="text-white/50">
-                    1 token · {myPlayer?.tokens ?? 0} left
-                  </span>
+                  <span className="text-white/50">1 token · {myPlayer?.tokens ?? 0} left</span>
                 </button>
               )}
             </div>
           </DndContext>
         )}
 
-        {/* OTHER PLAYERS: watch the active player's timeline */}
+        {/* ===== OTHER PLAYERS ===== */}
         {!isMyTurn && !isRevealing && activePlayer && (
-          <div className="space-y-2">
-            <p className="text-white/50 text-xs uppercase tracking-wider">
-              {activePlayer.name}'s timeline
-            </p>
-            <Timeline
-              timeline={activePlayer.timeline}
-              selectedPosition={isPlaced ? activePlayerPlacement : null}
-            />
-          </div>
-        )}
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+            <div className="space-y-3">
+              {currentCard &&
+                (canChallenge ? (
+                  <DraggableMystery card={currentCard} />
+                ) : (
+                  <NowPlaying card={currentCard} />
+                ))}
 
-        {/* Your own timeline (shown below when it's not your turn) */}
-        {!isMyTurn && !isRevealing && myTimeline.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-white/50 text-xs uppercase tracking-wider">Your timeline</p>
-            <Timeline timeline={myTimeline} />
-          </div>
+              <p className="text-white/50 text-xs uppercase tracking-wider">
+                {isPlaying
+                  ? `${activePlayer.name} is placing the song…`
+                  : canChallenge
+                  ? `Challenge! Drag onto a different spot — ${challengeSecs}s`
+                  : myChallenge
+                  ? `Challenge placed — revealing in ${challengeSecs}s`
+                  : (myPlayer?.tokens ?? 0) <= 0
+                  ? `No tokens to challenge — ${challengeSecs}s`
+                  : `${activePlayer.name}'s guess is locked — ${challengeSecs}s`}
+              </p>
+
+              <p className="text-white/40 text-xs">{activePlayer.name}'s timeline</p>
+              <Timeline
+                timeline={activePlayer.timeline}
+                onPlace={canChallenge ? placeChallenge : undefined}
+                droppablePositions={
+                  canChallenge
+                    ? range(activePlayer.timeline.length + 1).filter((p) => p !== activePlayerPlacement)
+                    : null
+                }
+                markers={
+                  isPlaced
+                    ? [
+                        { position: activePlayerPlacement, kind: 'active', label: 'Their guess' },
+                        ...challengerMarkers,
+                      ]
+                    : []
+                }
+              />
+
+              {myTimeline.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-white/40 text-xs mb-1">Your timeline</p>
+                  <Timeline timeline={myTimeline} />
+                </div>
+              )}
+            </div>
+          </DndContext>
         )}
       </div>
 
@@ -231,9 +298,10 @@ export default function Game() {
         {isMyTurn && isPlaced && !isRevealing && (
           <button
             onClick={reveal}
-            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80"
+            disabled={challengeSecs > 0}
+            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80 disabled:opacity-40"
           >
-            Reveal Year
+            {challengeSecs > 0 ? `Reveal in ${challengeSecs}s` : 'Reveal Year'}
           </button>
         )}
 
@@ -243,10 +311,8 @@ export default function Game() {
           </p>
         )}
 
-        {isMyTurn && phase === 'playing' && (
-          <p className="text-center text-white/40 text-sm py-3">
-            Drag the song onto your timeline
-          </p>
+        {isMyTurn && isPlaying && (
+          <p className="text-center text-white/40 text-sm py-3">Drag the song onto your timeline</p>
         )}
 
         {!isMyTurn && !isRevealing && (

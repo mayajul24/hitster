@@ -1,3 +1,5 @@
+const CHALLENGE_WINDOW_MS = 12000; // how long others can challenge after a placement
+
 class GameRoom {
   constructor(hostId, hostName, hostSpotifyId) {
     this.code = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -7,8 +9,9 @@ class GameRoom {
     this.deck = [];
     this.currentCard = null;
     this.currentPlayerIndex = 0;
-    this.tokenPlacements = {}; // { socketId: { yearBefore, yearAfter } }
+    this.challenges = {}; // { socketId: { position } }
     this.activePlayerPlacement = null;
+    this.challengeDeadline = null; // epoch ms until challenges are open
     this.playlistName = '';
   }
 
@@ -99,8 +102,9 @@ class GameRoom {
       return;
     }
     this.currentCard = this.deck.pop();
-    this.tokenPlacements = {};
+    this.challenges = {};
     this.activePlayerPlacement = null;
+    this.challengeDeadline = null;
     this.phase = 'playing';
   }
 
@@ -119,6 +123,8 @@ class GameRoom {
     if (this.phase !== 'playing') throw new Error('Cannot place now');
     this.activePlayerPlacement = position;
     this.phase = 'placed';
+    // Open the challenge window
+    this.challengeDeadline = Date.now() + CHALLENGE_WINDOW_MS;
   }
 
   skipCard(playerId) {
@@ -132,35 +138,61 @@ class GameRoom {
     this._drawCard();
   }
 
-  placeToken(playerId, position) {
-    if (this.getCurrentPlayer()?.id === playerId) throw new Error('Cannot bet on your own turn');
-    if (this.phase !== 'playing' && this.phase !== 'placed') throw new Error('Cannot place token now');
+  placeChallenge(playerId, position) {
+    if (this.phase !== 'placed') throw new Error('No challenge open right now');
+    if (this.getCurrentPlayer()?.id === playerId)
+      throw new Error("You can't challenge your own turn");
+    if (this.challengeDeadline && Date.now() > this.challengeDeadline)
+      throw new Error('Challenge window closed');
+    if (position === this.activePlayerPlacement)
+      throw new Error('Pick a different spot than the active player');
     const player = this.getPlayer(playerId);
     if (!player) throw new Error('Player not found');
-    if (player.tokens <= 0) throw new Error('No tokens left');
-    if (this.tokenPlacements[playerId]) throw new Error('Already placed a token this round');
+    if (player.tokens <= 0) throw new Error('No tokens left to challenge');
+    if (this.challenges[playerId]) throw new Error('You already challenged this round');
 
     player.tokens--;
-
-    // Record the year range this bet represents on the active player's timeline
-    const activeTimeline = this.getCurrentPlayer().timeline;
-    const yearBefore = position > 0 ? activeTimeline[position - 1].year : -Infinity;
-    const yearAfter = position < activeTimeline.length ? activeTimeline[position].year : Infinity;
-    this.tokenPlacements[playerId] = { position, yearBefore, yearAfter };
+    this.challenges[playerId] = { position };
   }
 
   reveal() {
     if (this.activePlayerPlacement === null) throw new Error('Place the card first');
+    if (this.phase !== 'placed') throw new Error('Nothing to reveal');
+    if (this.challengeDeadline && Date.now() < this.challengeDeadline)
+      throw new Error('Challenge window is still open');
+
     const { year } = this.currentCard;
     const activePlayer = this.getCurrentPlayer();
-    const correct = this._checkPosition(
-      activePlayer.timeline,
-      this.activePlayerPlacement,
-      year
-    );
-    if (correct) this._insertCard(activePlayer, this.currentCard);
+    const activeTimeline = activePlayer.timeline; // unchanged until we award cards
+    const activeCorrect = this._checkPosition(activeTimeline, this.activePlayerPlacement, year);
+
+    const outcomes = [
+      { playerId: activePlayer.id, role: 'active', correct: activeCorrect, wonCard: activeCorrect },
+    ];
+    const winners = activeCorrect ? [activePlayer] : [];
+
+    for (const [pid, ch] of Object.entries(this.challenges)) {
+      const challenger = this.getPlayer(pid);
+      if (!challenger) continue;
+      const chCorrect = this._checkPosition(activeTimeline, ch.position, year);
+      // Refund the token only when both the active player and challenger were right (a tie)
+      const refunded = chCorrect && activeCorrect;
+      if (refunded) challenger.tokens++;
+      if (chCorrect) winners.push(challenger);
+      outcomes.push({
+        playerId: pid,
+        role: 'challenger',
+        correct: chCorrect,
+        wonCard: chCorrect,
+        refunded,
+      });
+    }
+
+    // Award the card to every winner (each keeps their own copy)
+    for (const w of winners) this._insertCard(w, this.currentCard);
+
     this.phase = 'revealing';
-    return { year, correct };
+    return { year, outcomes };
   }
 
   _checkPosition(timeline, position, year) {
@@ -208,7 +240,8 @@ class GameRoom {
           : this.currentCard
         : null,
       activePlayerPlacement: this.activePlayerPlacement,
-      tokenPlacements: this.tokenPlacements,
+      challenges: this.challenges,
+      challengeDeadline: this.challengeDeadline,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,

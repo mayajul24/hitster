@@ -32,9 +32,9 @@ export function GameProvider({ children }) {
       setRevealData(null);
     });
 
-    socket.on('revealed', ({ year, correct, card, state }) => {
+    socket.on('revealed', ({ year, outcomes, card, state }) => {
       setGameState(state);
-      setRevealData({ year, correct, card });
+      setRevealData({ year, outcomes, card });
     });
 
     socket.on('game_over', ({ winner, reason, state }) => {
@@ -85,8 +85,8 @@ export function GameProvider({ children }) {
     socket.emit('skip_card', { roomCode });
   }, [roomCode]);
 
-  const placeToken = useCallback((position) => {
-    socket.emit('place_token', { roomCode, position });
+  const placeChallenge = useCallback((position) => {
+    socket.emit('place_challenge', { roomCode, position });
   }, [roomCode]);
 
   const reveal = useCallback(() => {
@@ -119,7 +119,7 @@ export function GameProvider({ children }) {
         startGame,
         placeCard,
         skipCard,
-        placeToken,
+        placeChallenge,
         reveal,
         nextTurn,
       }}

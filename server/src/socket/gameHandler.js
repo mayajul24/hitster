@@ -75,11 +75,11 @@ module.exports = function gameHandler(io, socket) {
     }
   });
 
-  socket.on('place_token', ({ roomCode, position }) => {
+  socket.on('place_challenge', ({ roomCode, position }) => {
     const room = getRoom(roomCode);
     if (!room) return emit('error', { message: 'Room not found' });
     try {
-      room.placeToken(socket.id, position);
+      room.placeChallenge(socket.id, position);
       broadcast(room.code, 'state_update', { state: room.publicState() });
     } catch (e) {
       emit('error', { message: e.message });
@@ -92,10 +92,10 @@ module.exports = function gameHandler(io, socket) {
     if (room.getCurrentPlayer()?.id !== socket.id)
       return emit('error', { message: 'Not your turn' });
     try {
-      const { year, correct } = room.reveal();
+      const { year, outcomes } = room.reveal();
       broadcast(room.code, 'revealed', {
         year,
-        correct,
+        outcomes,
         card: room.currentCard,
         state: room.publicState(),
       });

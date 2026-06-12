@@ -1,7 +1,21 @@
-export default function RevealResult({ revealData, playerName, isMe }) {
+export default function RevealResult({ revealData, players }) {
   if (!revealData) return null;
-  const { year, correct, card } = revealData;
-  const who = isMe ? 'You' : playerName || 'Player';
+  const { year, outcomes = [], card } = revealData;
+  const nameOf = (id) => players.find((p) => p.id === id)?.name || '?';
+
+  const labelFor = (o) => {
+    if (o.role === 'active') {
+      return o.correct
+        ? { t: 'Correct! +1 card', c: 'text-[#1DB954]' }
+        : { t: 'Wrong', c: 'text-hitster-accent' };
+    }
+    if (o.correct) {
+      return o.refunded
+        ? { t: 'Tied — card + token back', c: 'text-[#1DB954]' }
+        : { t: 'Challenge won! +1 card', c: 'text-[#1DB954]' };
+    }
+    return { t: 'Challenge failed', c: 'text-hitster-accent' };
+  };
 
   return (
     <div className="space-y-4">
@@ -15,13 +29,23 @@ export default function RevealResult({ revealData, playerName, isMe }) {
         <p className="text-6xl font-black text-hitster-yellow">{year}</p>
       </div>
 
-      {/* Result */}
-      <div
-        className={`text-center text-xl font-bold ${
-          correct ? 'text-[#1DB954]' : 'text-hitster-accent'
-        }`}
-      >
-        {correct ? `${who} got it! +1 card` : `${who} missed — no card`}
+      {/* Per-player outcomes */}
+      <div className="space-y-2">
+        {outcomes.map((o) => {
+          const l = labelFor(o);
+          return (
+            <div
+              key={o.playerId}
+              className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-2"
+            >
+              <span className="text-sm font-medium">
+                {nameOf(o.playerId)}
+                {o.role === 'active' && <span className="text-white/40 text-xs"> · turn</span>}
+              </span>
+              <span className={`text-sm font-semibold ${l.c}`}>{l.t}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
