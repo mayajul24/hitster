@@ -103,7 +103,9 @@ async function apiFetch(path, token, opts = {}) {
   if (res.status === 204 || res.status === 202) return null;
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error?.message || `Spotify ${res.status}`);
+    const err = new Error(body.error?.message || `Spotify ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }

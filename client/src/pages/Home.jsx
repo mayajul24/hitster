@@ -5,7 +5,7 @@ import { useGame } from '../hooks/useGame.jsx';
 import { initiateLogin } from '../lib/spotify.js';
 
 export default function Home() {
-  const { isLoggedIn, user } = useSpotify();
+  const { isLoggedIn, user, authError, logout } = useSpotify();
   const { createRoom, joinRoom, roomCode, error } = useGame();
   const navigate = useNavigate();
 
@@ -28,6 +28,7 @@ export default function Home() {
       initiateLogin();
       return;
     }
+    if (!user) return;
     setLoading(true);
     const name = playerName.trim() || user?.display_name || 'Player';
     if (action === 'create') {
@@ -52,7 +53,22 @@ export default function Home() {
           </div>
         )}
 
-        {!isLoggedIn ? (
+        {authError ? (
+          <div className="space-y-4">
+            <div className="bg-hitster-accent/20 border border-hitster-accent text-white text-sm rounded-xl p-4 text-center">
+              {authError}
+            </div>
+            <button
+              onClick={() => {
+                logout();
+                initiateLogin();
+              }}
+              className="w-full bg-[#1DB954] text-black font-bold py-4 rounded-2xl text-lg active:opacity-80 transition-opacity"
+            >
+              Log in again
+            </button>
+          </div>
+        ) : !isLoggedIn ? (
           <div className="space-y-4">
             <p className="text-white/70 text-center text-sm">
               Connect your Spotify Premium account to play
@@ -63,6 +79,11 @@ export default function Home() {
             >
               Login with Spotify
             </button>
+          </div>
+        ) : !user ? (
+          <div className="text-center text-white/60 text-sm py-8">
+            <div className="w-8 h-8 border-4 border-hitster-yellow border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            Loading your Spotify profile…
           </div>
         ) : (
           <div className="space-y-4">

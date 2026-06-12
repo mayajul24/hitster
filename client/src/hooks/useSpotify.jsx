@@ -8,6 +8,7 @@ export function SpotifyProvider({ children }) {
   const [refresh, setRefresh] = useState(() => localStorage.getItem('sp_refresh') || null);
   const [expiry, setExpiry] = useState(() => Number(localStorage.getItem('sp_expiry')) || 0);
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState(null);
   const refreshing = useRef(false);
 
   const saveTokens = useCallback((tokens) => {
@@ -39,26 +40,54 @@ export function SpotifyProvider({ children }) {
     }
   }, [accessToken, expiry, refresh, saveTokens]);
 
-  useEffect(() => {
-    if (!accessToken || user) return;
-    getToken()
-      .then((t) => getMe(t))
-      .then(setUser)
-      .catch(() => {});
-  }, [accessToken]);
-
   const logout = useCallback(() => {
     setAccessToken(null);
     setRefresh(null);
     setExpiry(0);
     setUser(null);
+    setAuthError(null);
     localStorage.removeItem('sp_access');
     localStorage.removeItem('sp_refresh');
     localStorage.removeItem('sp_expiry');
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const me = await getMe(token);
+      setUser(me);
+      setAuthError(null);
+    } catch (e) {
+      if (e.status === 403) {
+        setAuthError(
+          "This Spotify account isn't authorized for the app yet. Add it under " +
+            'Spotify Dashboard → User Management, then log in again.'
+        );
+      } else if (e.status === 401) {
+        logout();
+        setAuthError('Your Spotify session expired — please log in again.');
+      } else {
+        setAuthError("Couldn't load your Spotify profile. Please try logging in again.");
+      }
+    }
+  }, [getToken, logout]);
+
+  useEffect(() => {
+    if (accessToken && !user) loadProfile();
+  }, [accessToken]);
+
   return (
-    <Ctx.Provider value={{ user, getToken, saveTokens, logout, isLoggedIn: !!accessToken }}>
+    <Ctx.Provider
+      value={{
+        user,
+        authError,
+        getToken,
+        saveTokens,
+        logout,
+        retryProfile: loadProfile,
+        isLoggedIn: !!accessToken,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );
