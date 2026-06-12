@@ -44,8 +44,11 @@ class GameRoom {
   startGame() {
     if (this.deck.length === 0) throw new Error('No playlist set');
     if (this.players.length < 2) throw new Error('Need at least 2 players');
-    if (this.deck.length < this.players.length + 1)
-      throw new Error('Playlist has too few dated songs for this many players');
+    const needed = this.players.length * 10;
+    if (this.deck.length < needed)
+      throw new Error(
+        `Need at least 10 songs per player — ${this.players.length} players require ${needed} dated songs, but this playlist only has ${this.deck.length}. Pick a bigger playlist.`
+      );
     this.phase = 'playing';
     this.currentPlayerIndex = 0;
     // Deal each player one starting card (revealed on their own timeline)
@@ -133,6 +136,13 @@ class GameRoom {
     }
     this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
     this._drawCard();
+    // Deck exhausted — end the game and award it to whoever has the most cards
+    if (this.phase === 'ended') {
+      const leader = [...this.players].sort(
+        (a, b) => b.timeline.length - a.timeline.length
+      )[0];
+      return { winner: leader };
+    }
     return { winner: null };
   }
 

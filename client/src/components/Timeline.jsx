@@ -1,8 +1,10 @@
+import { useDroppable } from '@dnd-kit/core';
+
 // Horizontal timeline of song cards, oldest -> newest left to right.
-// onPlace(position)  — when provided, shows tappable insert slots between/around cards.
-// selectedPosition   — slot index the active player locked in (renders a mystery card there).
-export default function Timeline({ timeline, onPlace, selectedPosition = null }) {
-  const interactive = !!onPlace;
+// placing          — when true, renders drop targets (and tappable slots) between/around cards.
+// onPlace(position)— called when a slot is tapped (fallback to dragging).
+// selectedPosition — slot index the active player locked in (renders a mystery card there).
+export default function Timeline({ timeline, placing = false, onPlace, selectedPosition = null }) {
   const items = [];
 
   for (let pos = 0; pos <= timeline.length; pos++) {
@@ -10,22 +12,14 @@ export default function Timeline({ timeline, onPlace, selectedPosition = null })
 
     if (selected) {
       items.push(<MysteryCard key={`slot-${pos}`} />);
-    } else if (interactive) {
+    } else if (placing) {
       items.push(
-        <button
+        <DropSlot
           key={`slot-${pos}`}
-          onClick={() => onPlace(pos)}
-          aria-label={
-            pos === 0
-              ? 'Place before all'
-              : pos === timeline.length
-              ? 'Place after all'
-              : 'Place here'
-          }
-          className="w-12 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 border-dashed border-white/20 text-white/40 flex items-center justify-center active:bg-hitster-yellow/20 active:border-hitster-yellow active:text-hitster-yellow transition-colors"
-        >
-          <span className="text-2xl leading-none">+</span>
-        </button>
+          pos={pos}
+          onPlace={onPlace}
+          edge={pos === 0 ? 'before' : pos === timeline.length ? 'after' : null}
+        />
       );
     }
 
@@ -37,6 +31,24 @@ export default function Timeline({ timeline, onPlace, selectedPosition = null })
     <div className="flex items-stretch gap-1.5 overflow-x-auto pb-2 px-1 min-h-[8rem]">
       {items}
     </div>
+  );
+}
+
+function DropSlot({ pos, onPlace, edge }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `slot-${pos}` });
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={() => onPlace?.(pos)}
+      aria-label={edge === 'before' ? 'Place before all' : edge === 'after' ? 'Place after all' : 'Place here'}
+      className={`w-12 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 border-dashed flex items-center justify-center transition-colors ${
+        isOver
+          ? 'border-hitster-yellow bg-hitster-yellow/30 text-hitster-yellow scale-105'
+          : 'border-white/20 text-white/40 active:bg-hitster-yellow/20 active:border-hitster-yellow'
+      }`}
+    >
+      <span className="text-2xl leading-none">+</span>
+    </button>
   );
 }
 

@@ -138,13 +138,34 @@ export default function Lobby() {
               </div>
             )}
 
-            <button
-              onClick={startGame}
-              disabled={!selectedPlaylist || selectedPlaylist.loading || gameState.players.length < 2}
-              className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-40 active:opacity-80"
-            >
-              Start Game
-            </button>
+            {(() => {
+              const minSongs = gameState.players.length * 10;
+              const count = selectedPlaylist?.trackCount;
+              const notEnough = count != null && count < minSongs;
+              return (
+                <>
+                  {notEnough && (
+                    <p className="text-hitster-accent text-xs text-center">
+                      Need at least 10 songs per player — {gameState.players.length} players require{' '}
+                      {minSongs} dated songs, but “{selectedPlaylist.name}” only has {count}. Pick a
+                      bigger playlist.
+                    </p>
+                  )}
+                  <button
+                    onClick={startGame}
+                    disabled={
+                      !selectedPlaylist ||
+                      selectedPlaylist.loading ||
+                      gameState.players.length < 2 ||
+                      notEnough
+                    }
+                    className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-40 active:opacity-80"
+                  >
+                    Start Game
+                  </button>
+                </>
+              );
+            })()}
           </div>
         )}
 

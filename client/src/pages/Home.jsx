@@ -108,31 +108,17 @@ export default function Home() {
             {mode === null && (
               <div className="space-y-3">
                 <button
-                  onClick={() => setMode('create')}
-                  className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80"
-                >
-                  Create Room
-                </button>
-                <button
-                  onClick={() => setMode('join')}
-                  className="w-full bg-white/10 text-white font-bold py-4 rounded-2xl text-lg active:opacity-80"
-                >
-                  Join Room
-                </button>
-              </div>
-            )}
-
-            {mode === 'create' && (
-              <div className="space-y-3">
-                <button
                   disabled={!playerName.trim() || loading}
                   onClick={() => handleAction('create')}
                   className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-50 active:opacity-80"
                 >
                   {loading ? 'Creating...' : 'Create Room'}
                 </button>
-                <button onClick={() => setMode(null)} className="w-full text-white/50 py-2 text-sm">
-                  Back
+                <button
+                  onClick={() => setMode('join')}
+                  className="w-full bg-white/10 text-white font-bold py-4 rounded-2xl text-lg active:opacity-80"
+                >
+                  Join Room
                 </button>
               </div>
             )}

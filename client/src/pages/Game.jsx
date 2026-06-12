@@ -1,5 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  DndContext,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+} from '@dnd-kit/core';
 import { useGame } from '../hooks/useGame.jsx';
 import { useSpotify } from '../hooks/useSpotify.jsx';
 import { playTrack, getDevices } from '../lib/spotify.js';
@@ -26,10 +34,20 @@ export default function Game() {
   const { getToken } = useSpotify();
   const navigate = useNavigate();
 
+  const [countdown, setCountdown] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+  );
+
+  const phase = gameState?.phase;
+  const trackId = gameState?.currentCard?.trackId;
+
   // Auto-play the mystery track on this client's own Spotify device each new card
   useEffect(() => {
     const uri = gameState?.currentCard?.uri;
-    if (!uri || gameState.phase === 'revealing') return;
+    if (!uri || phase === 'revealing') return;
     (async () => {
       try {
         const token = await getToken();
@@ -38,7 +56,31 @@ export default function Game() {
         if (active) await playTrack(uri, token, active.id);
       } catch {}
     })();
-  }, [gameState?.currentCard?.trackId]);
+  }, [trackId]);
+
+  // After a reveal, auto-advance to the next turn with a 3..2..1 countdown.
+  // The host fires the actual advance so it only happens once.
+  useEffect(() => {
+    if (phase !== 'revealing') {
+      setCountdown(null);
+      return;
+    }
+    setCountdown(3);
+    const tick = setInterval(() => {
+      setCountdown((c) => (c > 1 ? c - 1 : 0));
+    }, 1000);
+    const advance = isHost ? setTimeout(() => nextTurn(), 3000) : null;
+    return () => {
+      clearInterval(tick);
+      if (advance) clearTimeout(advance);
+    };
+  }, [phase, trackId, isHost]);
+
+  const handleDragEnd = ({ over }) => {
+    if (over && typeof over.id === 'string' && over.id.startsWith('slot-')) {
+      placeCard(parseInt(over.id.slice(5), 10));
+    }
+  };
 
   if (gameOver) {
     const winner = gameState?.players.find((p) => p.id === gameOver.id) || gameOver;
@@ -81,7 +123,7 @@ export default function Game() {
     );
   }
 
-  const { phase, currentCard, currentPlayerId, activePlayerPlacement, players } = gameState;
+  const { currentCard, currentPlayerId, activePlayerPlacement, players } = gameState;
   const activePlayer = players.find((p) => p.id === currentPlayerId);
   const myTimeline = myPlayer?.timeline || [];
   const isRevealing = phase === 'revealing';
@@ -107,18 +149,22 @@ export default function Game() {
           <RevealResult revealData={revealData} playerName={activePlayer?.name} isMe={isMyTurn} />
         )}
 
-        {/* ACTIVE PLAYER: place the song on your own timeline */}
+        {/* ACTIVE PLAYER: drag the song onto your own timeline */}
         {isMyTurn && !isRevealing && (
-          <div className="space-y-2">
-            <p className="text-white/50 text-xs uppercase tracking-wider">
-              {isPlaced ? 'Locked in — reveal when ready' : 'Where does this song go? Tap a slot.'}
-            </p>
-            <Timeline
-              timeline={myTimeline}
-              onPlace={!isPlaced ? placeCard : undefined}
-              selectedPosition={isPlaced ? activePlayerPlacement : null}
-            />
-          </div>
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <div className="space-y-3">
+              <p className="text-white/50 text-xs uppercase tracking-wider">
+                {isPlaced ? 'Locked in — tap Reveal Year when ready' : 'Drag the song into your timeline (or tap a slot)'}
+              </p>
+              {!isPlaced && <DraggableSong />}
+              <Timeline
+                timeline={myTimeline}
+                placing={!isPlaced}
+                onPlace={placeCard}
+                selectedPosition={isPlaced ? activePlayerPlacement : null}
+              />
+            </div>
+          </DndContext>
         )}
 
         {/* OTHER PLAYERS: watch the active player's timeline */}
@@ -154,27 +200,45 @@ export default function Game() {
           </button>
         )}
 
-        {isRevealing && (isMyTurn || isHost) && (
-          <button
-            onClick={nextTurn}
-            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80"
-          >
-            Next Turn
-          </button>
-        )}
-
-        {isRevealing && !isMyTurn && !isHost && (
-          <p className="text-center text-white/40 text-sm py-3">Waiting for next turn…</p>
+        {isRevealing && (
+          <p className="text-center text-white/60 text-sm py-3">
+            Next round in <span className="text-hitster-yellow font-bold text-lg">{countdown ?? 3}</span>…
+          </p>
         )}
 
         {isMyTurn && phase === 'playing' && (
-          <p className="text-center text-white/40 text-sm py-3">Tap a slot to place the song</p>
+          <p className="text-center text-white/40 text-sm py-3">
+            Drag the song onto your timeline
+          </p>
         )}
 
         {!isMyTurn && !isRevealing && (
           <p className="text-center text-white/40 text-sm py-3">{activePlayer?.name}'s turn</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function DraggableSong() {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'mystery-song',
+  });
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 }
+    : undefined;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`w-28 h-28 mx-auto rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+        isDragging ? 'opacity-80 shadow-2xl' : ''
+      }`}
+    >
+      <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
+      <span className="text-hitster-yellow text-[11px] mt-1 font-semibold">Drag me</span>
     </div>
   );
 }
