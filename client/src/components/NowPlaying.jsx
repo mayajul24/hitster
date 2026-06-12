@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useSpotify } from '../hooks/useSpotify.jsx';
 import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
 
-// Slim now-playing bar for the hidden mystery song.
-// When drag props are passed (active player's turn) the whole bar becomes the
-// draggable element; the play button stays a normal click (it stops the drag).
+// The hidden mystery song as a small card. When drag props are passed
+// (active player's turn) the card itself is the draggable element; the
+// replay button below it is a separate control.
 export default function NowPlaying({
   card,
   dragRef,
@@ -49,42 +49,40 @@ export default function NowPlaying({
   };
 
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col items-center gap-2">
       <div
         ref={dragRef}
         style={dragStyle}
         {...dragListeners}
         {...dragAttributes}
-        className={`flex items-center gap-3 rounded-full pl-2 pr-4 py-2 border ${
+        className={`w-24 h-28 rounded-xl border-2 flex flex-col items-center justify-center gap-1 select-none ${
           draggable
-            ? 'bg-hitster-yellow/15 border-hitster-yellow cursor-grab active:cursor-grabbing touch-none select-none'
-            : 'bg-white/5 border-white/10'
+            ? 'border-hitster-yellow bg-hitster-yellow/15 cursor-grab active:cursor-grabbing touch-none'
+            : 'border-white/15 bg-hitster-card'
         } ${isDragging ? 'opacity-80 shadow-2xl' : ''}`}
       >
-        <button
-          onClick={playing ? handlePause : handlePlay}
-          onPointerDown={(e) => e.stopPropagation()}
-          disabled={loading}
-          aria-label={playing ? 'Pause' : 'Play'}
-          className="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center flex-shrink-0 active:opacity-80 disabled:opacity-50"
-        >
-          {loading ? (
-            <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <span className="text-lg leading-none">{playing ? '⏸' : '▶'}</span>
-          )}
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight">Mystery song</p>
-          <p className="text-white/40 text-xs leading-tight">
-            {draggable ? 'Drag me onto your timeline' : 'Listen & place it — tap to replay'}
-          </p>
-        </div>
-        {draggable && <span className="text-hitster-yellow text-xl flex-shrink-0 leading-none">⤢</span>}
+        <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
+        <span className="text-white/50 text-[10px] font-semibold">
+          {draggable ? 'Drag me' : 'Mystery'}
+        </span>
       </div>
+
+      <button
+        onClick={playing ? handlePause : handlePlay}
+        disabled={loading}
+        className="px-4 py-1.5 rounded-full bg-[#1DB954] text-black text-xs font-bold flex items-center gap-1.5 active:opacity-80 disabled:opacity-50"
+      >
+        {loading ? (
+          <span className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <span className="text-sm leading-none">{playing ? '⏸' : '▶'}</span>
+        )}
+        {playing ? 'Pause' : 'Replay'}
+      </button>
+
       {deviceError && (
-        <p className="text-hitster-accent text-xs px-3">
-          Open the Spotify app on your device first, then tap play.
+        <p className="text-hitster-accent text-[11px] text-center max-w-[12rem]">
+          Open the Spotify app on your device first, then tap ▶.
         </p>
       )}
     </div>
