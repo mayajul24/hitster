@@ -29,11 +29,46 @@ class GameRoom {
 
   removePlayer(id) {
     const idx = this.players.findIndex((p) => p.id === id);
-    if (idx === -1) return;
+    if (idx === -1) return { removed: false, wasCurrent: false };
+    const wasCurrent = idx === this.currentPlayerIndex;
+    const currentId = this.getCurrentPlayer()?.id;
     this.players.splice(idx, 1);
-    if (this.currentPlayerIndex >= this.players.length) {
+    // Keep pointing at the same active player if they're still here
+    if (!wasCurrent && currentId) {
+      const newIdx = this.players.findIndex((p) => p.id === currentId);
+      this.currentPlayerIndex = newIdx === -1 ? 0 : newIdx;
+    } else if (this.currentPlayerIndex >= this.players.length) {
       this.currentPlayerIndex = 0;
     }
+    return { removed: true, wasCurrent };
+  }
+
+  // Handle a player disconnecting. Returns details so the socket layer can
+  // notify the room and, if needed, stop the game.
+  handleLeave(id) {
+    const name = this.getPlayer(id)?.name || 'A player';
+    const { removed, wasCurrent } = this.removePlayer(id);
+    if (!removed) return { removed: false, name };
+
+    const inProgress = this.phase !== 'lobby' && this.phase !== 'ended';
+    let stopped = false;
+    let winner = null;
+
+    if (inProgress && this.players.length < 2) {
+      // Not enough players to continue — stop the game
+      this.phase = 'ended';
+      stopped = true;
+      winner = this.players[0] || null;
+    } else if (inProgress && wasCurrent && (this.phase === 'playing' || this.phase === 'placed')) {
+      // The active player left mid-turn — give the next player a fresh song
+      this._drawCard();
+      if (this.phase === 'ended') {
+        stopped = true;
+        winner = [...this.players].sort((a, b) => b.timeline.length - a.timeline.length)[0] || null;
+      }
+    }
+
+    return { removed: true, name, stopped, winner };
   }
 
   setDeck(tracks, playlistName) {

@@ -37,9 +37,14 @@ export function GameProvider({ children }) {
       setRevealData({ year, correct, card });
     });
 
-    socket.on('game_over', ({ winner, state }) => {
+    socket.on('game_over', ({ winner, reason, state }) => {
       setGameState(state);
-      setGameOver(winner);
+      setGameOver({ ...(winner || {}), reason });
+    });
+
+    socket.on('player_left', ({ name }) => {
+      setError(`${name} left the game`);
+      setTimeout(() => setError(null), 3000);
     });
 
     socket.on('error', ({ message }) => {

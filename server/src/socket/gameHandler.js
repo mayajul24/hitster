@@ -124,11 +124,29 @@ module.exports = function gameHandler(io, socket) {
       if (roomCode === socket.id) continue;
       const room = rooms.get(roomCode);
       if (!room) continue;
-      room.removePlayer(socket.id);
+
+      const result = room.handleLeave(socket.id);
+      if (!result.removed) continue;
+
       if (room.players.length === 0) {
         rooms.delete(roomCode);
+        continue;
+      }
+
+      // Reassign host if the one who left was hosting
+      if (room.hostId === socket.id) room.hostId = room.players[0].id;
+
+      // Tell everyone who left
+      io.to(roomCode).emit('player_left', { name: result.name });
+
+      if (result.stopped) {
+        io.to(roomCode).emit('game_over', {
+          winner: result.winner,
+          reason: 'abandoned',
+          state: room.publicState(),
+        });
+        rooms.delete(roomCode);
       } else {
-        if (room.hostId === socket.id) room.hostId = room.players[0].id;
         io.to(roomCode).emit('state_update', { state: room.publicState() });
       }
     }

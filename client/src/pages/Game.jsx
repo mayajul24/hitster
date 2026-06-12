@@ -85,16 +85,21 @@ export default function Game() {
   };
 
   if (gameOver) {
+    const abandoned = gameOver.reason === 'abandoned';
     const winner = gameState?.players.find((p) => p.id === gameOver.id) || gameOver;
-    const isWinner = gameOver.id === mySocketId;
+    const isWinner = !abandoned && gameOver.id === mySocketId;
     return (
       <div className="min-h-screen bg-hitster-dark flex flex-col items-center justify-center p-6 text-center space-y-6">
-        <div className="text-6xl">{isWinner ? '🏆' : '🎵'}</div>
+        <div className="text-6xl">{abandoned ? '🛑' : isWinner ? '🏆' : '🎵'}</div>
         <div>
           <p className="text-hitster-yellow font-black text-3xl">
-            {isWinner ? 'You won!' : `${winner.name} wins!`}
+            {abandoned ? 'Game stopped' : isWinner ? 'You won!' : `${winner.name} wins!`}
           </p>
-          <p className="text-white/50 mt-2">{winner.timeline?.length} songs on their timeline</p>
+          <p className="text-white/50 mt-2">
+            {abandoned
+              ? 'A player left — not enough players to continue.'
+              : `${winner.timeline?.length} songs on their timeline`}
+          </p>
         </div>
         <div className="space-y-2 w-full max-w-xs">
           {gameState?.players
