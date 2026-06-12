@@ -7,6 +7,7 @@ import {
   useSensor,
   useSensors,
   useDraggable,
+  pointerWithin,
 } from '@dnd-kit/core';
 import { useGame } from '../hooks/useGame.jsx';
 import { useSpotify } from '../hooks/useSpotify.jsx';
@@ -142,22 +143,29 @@ export default function Game() {
         {/* Players row */}
         <PlayerList players={players} currentPlayerId={currentPlayerId} myId={mySocketId} />
 
-        {/* Mystery song now playing */}
-        {currentCard && !isRevealing && <NowPlaying card={currentCard} />}
+        {/* Non-active players: slim mystery bar (audio only) */}
+        {currentCard && !isRevealing && !isMyTurn && <NowPlaying card={currentCard} />}
 
         {/* Reveal result */}
         {isRevealing && revealData && (
           <RevealResult revealData={revealData} playerName={activePlayer?.name} isMe={isMyTurn} />
         )}
 
-        {/* ACTIVE PLAYER: drag the song onto your own timeline */}
+        {/* ACTIVE PLAYER: drag the Mystery Song bar onto your own timeline */}
         {isMyTurn && !isRevealing && (
-          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
             <div className="space-y-3">
+              {currentCard &&
+                (isPlaced ? (
+                  <NowPlaying card={currentCard} />
+                ) : (
+                  <DraggableMystery card={currentCard} />
+                ))}
               <p className="text-white/50 text-xs uppercase tracking-wider">
-                {isPlaced ? 'Locked in — tap Reveal Year when ready' : 'Drag the song into your timeline (or tap a slot)'}
+                {isPlaced
+                  ? 'Locked in — tap Reveal Year when ready'
+                  : 'Drag the Mystery Song onto your timeline (or tap a slot)'}
               </p>
-              {!isPlaced && <DraggableSong />}
               <Timeline
                 timeline={myTimeline}
                 placing={!isPlaced}
@@ -234,7 +242,7 @@ export default function Game() {
   );
 }
 
-function DraggableSong() {
+function DraggableMystery({ card }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: 'mystery-song',
   });
@@ -242,17 +250,13 @@ function DraggableSong() {
     ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 }
     : undefined;
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className={`w-20 h-24 mx-auto rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
-        isDragging ? 'opacity-80 shadow-2xl' : ''
-      }`}
-    >
-      <span className="text-3xl text-hitster-yellow font-black leading-none">?</span>
-      <span className="text-hitster-yellow text-[10px] mt-1 font-semibold">Drag me</span>
-    </div>
+    <NowPlaying
+      card={card}
+      dragRef={setNodeRef}
+      dragListeners={listeners}
+      dragAttributes={attributes}
+      dragStyle={style}
+      isDragging={isDragging}
+    />
   );
 }
