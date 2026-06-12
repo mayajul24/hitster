@@ -81,10 +81,10 @@ module.exports = function gameHandler(io, socket) {
     if (room.getCurrentPlayer()?.id !== socket.id)
       return emit('error', { message: 'Not your turn' });
     try {
-      const { year, outcomes } = room.reveal();
+      const { year, correct } = room.reveal();
       broadcast(room.code, 'revealed', {
         year,
-        outcomes,
+        correct,
         card: room.currentCard,
         state: room.publicState(),
       });

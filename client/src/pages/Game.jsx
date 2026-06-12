@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useGame } from '../hooks/useGame.jsx';
 import { useSpotify } from '../hooks/useSpotify.jsx';
@@ -9,7 +9,7 @@ import PlayerList from '../components/PlayerList.jsx';
 import RevealResult from '../components/RevealResult.jsx';
 
 export default function Game() {
-  const { roomCode } = useParams();
+  useParams();
   const {
     gameState,
     mySocketId,
@@ -20,37 +20,25 @@ export default function Game() {
     gameOver,
     error,
     placeCard,
-    placeToken,
     reveal,
     nextTurn,
   } = useGame();
   const { getToken } = useSpotify();
   const navigate = useNavigate();
 
-  const [myTokenPlaced, setMyTokenPlaced] = useState(false);
-
-  // Auto-play track on all devices when a new card comes in
+  // Auto-play the mystery track on this client's own Spotify device each new card
   useEffect(() => {
-    if (!gameState?.currentCard) return;
-    autoPlay(gameState.currentCard.uri);
+    const uri = gameState?.currentCard?.uri;
+    if (!uri || gameState.phase === 'revealing') return;
+    (async () => {
+      try {
+        const token = await getToken();
+        const devices = await getDevices(token);
+        const active = devices.find((d) => d.is_active) || devices[0];
+        if (active) await playTrack(uri, token, active.id);
+      } catch {}
+    })();
   }, [gameState?.currentCard?.trackId]);
-
-  // Reset token state on new turn
-  useEffect(() => {
-    if (gameState?.phase === 'playing') {
-      setMyTokenPlaced(false);
-    }
-  }, [gameState?.currentCard?.trackId]);
-
-  const autoPlay = async (uri) => {
-    if (!uri) return;
-    try {
-      const token = await getToken();
-      const devices = await getDevices(token);
-      const active = devices.find((d) => d.is_active) || devices[0];
-      if (active) await playTrack(uri, token, active.id);
-    } catch {}
-  };
 
   if (gameOver) {
     const winner = gameState?.players.find((p) => p.id === gameOver.id) || gameOver;
@@ -59,7 +47,9 @@ export default function Game() {
       <div className="min-h-screen bg-hitster-dark flex flex-col items-center justify-center p-6 text-center space-y-6">
         <div className="text-6xl">{isWinner ? '🏆' : '🎵'}</div>
         <div>
-          <p className="text-hitster-yellow font-black text-3xl">{isWinner ? 'You won!' : `${winner.name} wins!`}</p>
+          <p className="text-hitster-yellow font-black text-3xl">
+            {isWinner ? 'You won!' : `${winner.name} wins!`}
+          </p>
           <p className="text-white/50 mt-2">{winner.timeline?.length} songs on their timeline</p>
         </div>
         <div className="space-y-2 w-full max-w-xs">
@@ -91,22 +81,9 @@ export default function Game() {
     );
   }
 
-  const { phase, currentCard, currentPlayerId, tokenPlacements, activePlayerPlacement, players } = gameState;
+  const { phase, currentCard, currentPlayerId, activePlayerPlacement, players } = gameState;
   const activePlayer = players.find((p) => p.id === currentPlayerId);
   const myTimeline = myPlayer?.timeline || [];
-
-  // Build otherTokens for display on active player's timeline
-  const otherTokensOnActiveTimeline = Object.entries(tokenPlacements)
-    .filter(([pid]) => pid !== mySocketId)
-    .map(([pid, bet]) => ({
-      playerId: pid,
-      playerName: players.find((p) => p.id === pid)?.name || '?',
-      position: bet.position,
-    }));
-
-  const myTokenOnActive = tokenPlacements[mySocketId];
-  const myTokenPosition = myTokenOnActive?.position ?? null;
-
   const isRevealing = phase === 'revealing';
   const isPlaced = phase === 'placed';
 
@@ -122,67 +99,46 @@ export default function Game() {
         {/* Players row */}
         <PlayerList players={players} currentPlayerId={currentPlayerId} myId={mySocketId} />
 
-        {/* Current card / now playing */}
-        {currentCard && !isRevealing && (
-          <NowPlaying card={currentCard} isMyTurn={isMyTurn} />
-        )}
+        {/* Mystery song now playing */}
+        {currentCard && !isRevealing && <NowPlaying card={currentCard} />}
 
         {/* Reveal result */}
         {isRevealing && revealData && (
-          <RevealResult revealData={revealData} players={players} myId={mySocketId} />
+          <RevealResult revealData={revealData} playerName={activePlayer?.name} isMe={isMyTurn} />
         )}
 
-        {/* --- ACTIVE PLAYER: place card on their own timeline --- */}
+        {/* ACTIVE PLAYER: place the song on your own timeline */}
         {isMyTurn && !isRevealing && (
           <div className="space-y-2">
             <p className="text-white/50 text-xs uppercase tracking-wider">
-              {isPlaced ? 'Waiting for others... tap Reveal when ready' : 'Where does this song go?'}
+              {isPlaced ? 'Locked in — reveal when ready' : 'Where does this song go? Tap a slot.'}
             </p>
             <Timeline
               timeline={myTimeline}
               onPlace={!isPlaced ? placeCard : undefined}
-              highlightPosition={activePlayerPlacement}
-              tokenPosition={myTokenPosition}
-              otherTokens={otherTokensOnActiveTimeline}
-              disabled={isPlaced}
+              selectedPosition={isPlaced ? activePlayerPlacement : null}
             />
           </div>
         )}
 
-        {/* --- OTHER PLAYERS: see active player's timeline, place token --- */}
+        {/* OTHER PLAYERS: watch the active player's timeline */}
         {!isMyTurn && !isRevealing && activePlayer && (
           <div className="space-y-2">
             <p className="text-white/50 text-xs uppercase tracking-wider">
-              {activePlayer.name}'s timeline —{' '}
-              {myPlayer?.tokens > 0 && !myTokenPlaced
-                ? 'tap a slot to bet a token'
-                : myTokenPlaced
-                ? 'Token placed'
-                : 'No tokens left'}
+              {activePlayer.name}'s timeline
             </p>
             <Timeline
               timeline={activePlayer.timeline}
-              onPlace={
-                myPlayer?.tokens > 0 && !myTokenPlaced && !isRevealing
-                  ? (pos) => {
-                      placeToken(pos);
-                      setMyTokenPlaced(true);
-                    }
-                  : undefined
-              }
-              highlightPosition={activePlayerPlacement}
-              tokenPosition={myTokenPosition}
-              otherTokens={otherTokensOnActiveTimeline}
-              disabled={myTokenPlaced || myPlayer?.tokens === 0 || isRevealing}
+              selectedPosition={isPlaced ? activePlayerPlacement : null}
             />
           </div>
         )}
 
-        {/* My own timeline (shown below when it's not my turn) */}
+        {/* Your own timeline (shown below when it's not your turn) */}
         {!isMyTurn && !isRevealing && myTimeline.length > 0 && (
           <div className="space-y-2">
             <p className="text-white/50 text-xs uppercase tracking-wider">Your timeline</p>
-            <Timeline timeline={myTimeline} disabled />
+            <Timeline timeline={myTimeline} />
           </div>
         )}
       </div>
@@ -201,28 +157,22 @@ export default function Game() {
         {isRevealing && (isMyTurn || isHost) && (
           <button
             onClick={nextTurn}
-            className="w-full bg-white/10 text-white font-bold py-4 rounded-2xl text-lg active:opacity-80"
+            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80"
           >
             Next Turn
           </button>
         )}
 
         {isRevealing && !isMyTurn && !isHost && (
-          <p className="text-center text-white/40 text-sm py-3">
-            Waiting for next turn...
-          </p>
+          <p className="text-center text-white/40 text-sm py-3">Waiting for next turn…</p>
         )}
 
         {isMyTurn && phase === 'playing' && (
-          <p className="text-center text-white/40 text-sm py-3">
-            Tap a slot on your timeline to place the song
-          </p>
+          <p className="text-center text-white/40 text-sm py-3">Tap a slot to place the song</p>
         )}
 
         {!isMyTurn && !isRevealing && (
-          <p className="text-center text-white/40 text-sm py-3">
-            {activePlayer?.name}'s turn
-          </p>
+          <p className="text-center text-white/40 text-sm py-3">{activePlayer?.name}'s turn</p>
         )}
       </div>
     </div>

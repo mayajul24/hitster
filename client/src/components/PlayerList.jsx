@@ -4,6 +4,7 @@ export default function PlayerList({ players, currentPlayerId, myId }) {
       {players.map((p) => {
         const isActive = p.id === currentPlayerId;
         const isMe = p.id === myId;
+        const n = p.timeline.length;
         return (
           <div
             key={p.id}
@@ -18,26 +19,16 @@ export default function PlayerList({ players, currentPlayerId, myId }) {
             >
               {p.name[0]?.toUpperCase()}
             </div>
-            <p className={`text-xs font-semibold mt-1 truncate max-w-[64px] ${isActive ? 'text-black' : 'text-white'}`}>
+            <p
+              className={`text-xs font-semibold mt-1 truncate max-w-[64px] ${
+                isActive ? 'text-black' : 'text-white'
+              }`}
+            >
               {isMe ? 'You' : p.name}
             </p>
             <p className={`text-xs ${isActive ? 'text-black/60' : 'text-white/40'}`}>
-              {p.timeline.length} cards
+              {n} card{n === 1 ? '' : 's'}
             </p>
-            <div className="flex justify-center gap-0.5 mt-1">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-2 h-2 rounded-full ${
-                    i < p.tokens
-                      ? isActive
-                        ? 'bg-black'
-                        : 'bg-hitster-accent'
-                      : 'bg-white/20'
-                  }`}
-                />
-              ))}
-            </div>
           </div>
         );
       })}

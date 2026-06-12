@@ -13,7 +13,7 @@ class GameRoom {
   }
 
   _makePlayer(id, name, spotifyId) {
-    return { id, name, spotifyId, tokens: 2, timeline: [], connected: true };
+    return { id, name, spotifyId, tokens: 0, timeline: [], connected: true };
   }
 
   getPlayer(id) {
@@ -44,8 +44,14 @@ class GameRoom {
   startGame() {
     if (this.deck.length === 0) throw new Error('No playlist set');
     if (this.players.length < 2) throw new Error('Need at least 2 players');
+    if (this.deck.length < this.players.length + 1)
+      throw new Error('Playlist has too few dated songs for this many players');
     this.phase = 'playing';
     this.currentPlayerIndex = 0;
+    // Deal each player one starting card (revealed on their own timeline)
+    for (const player of this.players) {
+      player.timeline = [this.deck.pop()];
+    }
     this._drawCard();
   }
 
@@ -62,8 +68,8 @@ class GameRoom {
 
   getPublicCard() {
     if (!this.currentCard) return null;
-    const { year, ...pub } = this.currentCard;
-    return pub;
+    // Hide every detail while in play — players only hear the song.
+    return { trackId: this.currentCard.trackId, uri: this.currentCard.uri };
   }
 
   getCurrentPlayer() {
@@ -95,38 +101,17 @@ class GameRoom {
   }
 
   reveal() {
-    if (this.activePlayerPlacement === null) throw new Error('Active player has not placed yet');
+    if (this.activePlayerPlacement === null) throw new Error('Place the card first');
     const { year } = this.currentCard;
     const activePlayer = this.getCurrentPlayer();
-    const outcomes = [];
-
-    const activeCorrect = this._checkPosition(activePlayer.timeline, this.activePlayerPlacement, year);
-
-    if (activeCorrect) {
-      this._insertCard(activePlayer, this.currentCard);
-      outcomes.push({ playerId: activePlayer.id, result: 'correct' });
-      for (const pid of Object.keys(this.tokenPlacements)) {
-        outcomes.push({ playerId: pid, result: 'challenge_failed' });
-      }
-    } else {
-      outcomes.push({ playerId: activePlayer.id, result: 'wrong' });
-      for (const [pid, bet] of Object.entries(this.tokenPlacements)) {
-        const challenger = this.getPlayer(pid);
-        if (!challenger) continue;
-        const correct =
-          (bet.yearBefore === -Infinity || bet.yearBefore <= year) &&
-          (bet.yearAfter === Infinity || bet.yearAfter >= year);
-        if (correct) {
-          this._insertCard(challenger, this.currentCard);
-          outcomes.push({ playerId: pid, result: 'challenge_correct' });
-        } else {
-          outcomes.push({ playerId: pid, result: 'challenge_wrong' });
-        }
-      }
-    }
-
+    const correct = this._checkPosition(
+      activePlayer.timeline,
+      this.activePlayerPlacement,
+      year
+    );
+    if (correct) this._insertCard(activePlayer, this.currentCard);
     this.phase = 'revealing';
-    return { year, outcomes };
+    return { year, correct };
   }
 
   _checkPosition(timeline, position, year) {

@@ -32,9 +32,9 @@ export function GameProvider({ children }) {
       setRevealData(null);
     });
 
-    socket.on('revealed', ({ year, outcomes, card, state }) => {
+    socket.on('revealed', ({ year, correct, card, state }) => {
       setGameState(state);
-      setRevealData({ year, outcomes, card });
+      setRevealData({ year, correct, card });
     });
 
     socket.on('game_over', ({ winner, state }) => {

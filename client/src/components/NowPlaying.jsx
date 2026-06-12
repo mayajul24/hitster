@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useSpotify } from '../hooks/useSpotify.jsx';
 import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
 
-export default function NowPlaying({ card, isMyTurn }) {
+// The mystery song that's currently playing — no details shown, only audio.
+export default function NowPlaying({ card }) {
   const { getToken } = useSpotify();
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,9 +24,7 @@ export default function NowPlaying({ card, isMyTurn }) {
       await playTrack(card.uri, token, active.id);
       setPlaying(true);
     } catch (e) {
-      if (e.message?.includes('No active device') || e.message?.includes('404')) {
-        setDeviceError(true);
-      }
+      if (e.message?.includes('No active device') || e.status === 404) setDeviceError(true);
     } finally {
       setLoading(false);
     }
@@ -40,21 +39,20 @@ export default function NowPlaying({ card, isMyTurn }) {
   };
 
   return (
-    <div className="bg-white/5 rounded-2xl p-4 space-y-3">
+    <div className="bg-hitster-card rounded-2xl p-4 space-y-3 border border-white/10">
       <div className="flex items-center gap-3">
-        {card?.albumArt && (
-          <img src={card.albumArt} className="w-14 h-14 rounded-xl object-cover" alt="" />
-        )}
+        <div className="w-14 h-14 rounded-xl bg-hitster-yellow/15 border border-hitster-yellow/40 flex items-center justify-center text-3xl text-hitster-yellow font-black">
+          ?
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate">{card?.trackName}</p>
-          <p className="text-white/50 text-xs truncate">{card?.artist}</p>
-          <p className="text-white/30 text-xs mt-0.5">Year hidden until reveal</p>
+          <p className="font-semibold text-sm">Mystery song</p>
+          <p className="text-white/50 text-xs">Listen and guess when it came out</p>
         </div>
       </div>
 
       {deviceError && (
         <p className="text-hitster-accent text-xs">
-          Open the Spotify app on your device first, then try again.
+          Open the Spotify app on your device first, then tap play.
         </p>
       )}
 
@@ -71,7 +69,7 @@ export default function NowPlaying({ card, isMyTurn }) {
           </>
         ) : (
           <>
-            <span className="text-lg">▶</span> Play on Spotify
+            <span className="text-lg">▶</span> Replay song
           </>
         )}
       </button>
