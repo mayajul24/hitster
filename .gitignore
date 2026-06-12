@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# build output
+client/dist/
+
+# env files (set these as env vars in Vercel / Render instead)
+.env
+*.env
+!.env.example
+
+# logs
+npm-debug.log*
+*.log
+
+# editor / OS
+.DS_Store
+.vscode/
