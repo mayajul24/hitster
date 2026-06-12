@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { useGame } from '../hooks/useGame.jsx';
 import { useSpotify } from '../hooks/useSpotify.jsx';
-import { playTrack, getDevices } from '../lib/spotify.js';
+import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
 import NowPlaying from '../components/NowPlaying.jsx';
 import Timeline from '../components/Timeline.jsx';
 import PlayerList from '../components/PlayerList.jsx';
@@ -77,6 +77,16 @@ export default function Game() {
       if (advance) clearTimeout(advance);
     };
   }, [phase, trackId, isHost]);
+
+  // Stop Spotify when the game ends (win, deck empty, or abandoned)
+  useEffect(() => {
+    if (!gameOver) return;
+    (async () => {
+      try {
+        await pausePlayback(await getToken());
+      } catch {}
+    })();
+  }, [gameOver]);
 
   const handleDragEnd = ({ over }) => {
     if (over && typeof over.id === 'string' && over.id.startsWith('slot-')) {
