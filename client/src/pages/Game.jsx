@@ -9,6 +9,7 @@ import {
   useDraggable,
   pointerWithin,
 } from '@dnd-kit/core';
+import { restrictToFirstScrollableAncestor } from '@dnd-kit/modifiers';
 import { useGame } from '../hooks/useGame.jsx';
 import { useSpotify } from '../hooks/useSpotify.jsx';
 import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
@@ -315,7 +316,12 @@ export default function Game() {
 
         {/* All players' timelines, always visible */}
         {!isRevealing ? (
-          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={pointerWithin}
+            modifiers={[restrictToFirstScrollableAncestor]}
+            onDragEnd={handleDragEnd}
+          >
             <div className="space-y-4">{players.map(renderBlock)}</div>
           </DndContext>
         ) : (
