@@ -1,11 +1,18 @@
-import { useDroppable } from '@dnd-kit/core';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 
 // Horizontal timeline of song cards, oldest -> newest left to right.
 // droppablePositions — array of slot indices that accept a drop / tap (or null).
 // onPlace(position)   — called when a droppable slot is tapped.
 // markers             — [{ position, kind: 'mystery'|'active'|'me'|'other', label }]
 //                       rendered as a "?" placeholder at that slot.
-export default function Timeline({ timeline, onPlace, droppablePositions = null, markers = [] }) {
+// mysteryDraggable    — when true, a 'mystery' marker can be dragged to another slot.
+export default function Timeline({
+  timeline,
+  onPlace,
+  droppablePositions = null,
+  markers = [],
+  mysteryDraggable = false,
+}) {
   const items = [];
 
   for (let pos = 0; pos <= timeline.length; pos++) {
@@ -25,9 +32,13 @@ export default function Timeline({ timeline, onPlace, droppablePositions = null,
       if (here.length) {
         items.push(
           <div key={`m-${pos}`} className="flex-shrink-0 flex flex-col gap-1 justify-center">
-            {here.map((m, i) => (
-              <Marker key={i} kind={m.kind} label={m.label} />
-            ))}
+            {here.map((m, i) =>
+              m.kind === 'mystery' && mysteryDraggable ? (
+                <DraggableMarker key={i} label={m.label} />
+              ) : (
+                <Marker key={i} kind={m.kind} label={m.label} />
+              )
+            )}
           </div>
         );
       }
@@ -74,6 +85,30 @@ function Marker({ kind, label }) {
     <div
       className={`w-20 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 flex flex-col items-center justify-center ${
         MARKER_STYLES[kind] || MARKER_STYLES.other
+      }`}
+    >
+      <span className="text-3xl font-black leading-none">?</span>
+      <span className="text-[10px] font-semibold mt-1 px-1 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+// The active player's placed "?" — draggable so they can move it to another slot.
+function DraggableMarker({ label }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'mystery-song',
+  });
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 }
+    : undefined;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`w-20 flex-shrink-0 self-stretch min-h-[7.5rem] rounded-xl border-2 border-hitster-yellow bg-hitster-yellow/15 text-hitster-yellow flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+        isDragging ? 'opacity-80 shadow-2xl' : ''
       }`}
     >
       <span className="text-3xl font-black leading-none">?</span>

@@ -7,6 +7,7 @@ import { playTrack, pausePlayback, getDevices } from '../lib/spotify.js';
 // replay button below it is a separate control.
 export default function NowPlaying({
   card,
+  compact = false,
   dragRef,
   dragListeners,
   dragAttributes,
@@ -50,22 +51,24 @@ export default function NowPlaying({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div
-        ref={dragRef}
-        style={dragStyle}
-        {...dragListeners}
-        {...dragAttributes}
-        className={`w-24 h-28 rounded-xl border-2 flex flex-col items-center justify-center gap-1 select-none ${
-          draggable
-            ? 'border-hitster-yellow bg-hitster-yellow/15 cursor-grab active:cursor-grabbing touch-none'
-            : 'border-white/15 bg-hitster-card'
-        } ${isDragging ? 'opacity-80 shadow-2xl' : ''}`}
-      >
-        <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
-        <span className="text-white/50 text-[10px] font-semibold">
-          {draggable ? 'Drag me' : 'Mystery'}
-        </span>
-      </div>
+      {!compact && (
+        <div
+          ref={dragRef}
+          style={dragStyle}
+          {...dragListeners}
+          {...dragAttributes}
+          className={`w-24 h-28 rounded-xl border-2 flex flex-col items-center justify-center gap-1 select-none ${
+            draggable
+              ? 'border-hitster-yellow bg-hitster-yellow/15 cursor-grab active:cursor-grabbing touch-none'
+              : 'border-white/15 bg-hitster-card'
+          } ${isDragging ? 'opacity-80 shadow-2xl' : ''}`}
+        >
+          <span className="text-4xl text-hitster-yellow font-black leading-none">?</span>
+          <span className="text-white/50 text-[10px] font-semibold">
+            {draggable ? 'Drag me' : 'Mystery'}
+          </span>
+        </div>
+      )}
 
       <button
         onClick={playing ? handlePause : handlePlay}

@@ -178,6 +178,7 @@ export default function Game() {
         onPlace: (pos) => setMyPlacement(pos),
         droppablePositions: range(p.timeline.length + 1).filter((s) => s !== myPlacement),
         markers: myPlacement != null ? [{ position: myPlacement, kind: 'mystery', label: 'Here' }] : [],
+        mysteryDraggable: myPlacement != null,
       };
     }
     if (isActiveP && isPlaced) {
@@ -215,11 +216,22 @@ export default function Game() {
   const renderBlock = (p) => {
     const isActiveP = p.id === currentPlayerId;
     const props = timelineProps(p);
-    const mysteryHere =
-      !isRevealing &&
-      currentCard &&
-      iAmDragger &&
-      ((isMyTurn && isActiveP && isPlaying) || (canChallenge && isActiveP));
+    // What to show above this player's timeline (the mystery to grab, or a replay control)
+    let aboveEl = null;
+    if (!isRevealing && currentCard) {
+      if (isMyTurn && isActiveP && isPlaying) {
+        // Before placing: the draggable card. After placing: it lives in the
+        // timeline (draggable there), so here we keep only a replay control.
+        aboveEl =
+          myPlacement == null ? (
+            <DraggableMystery card={currentCard} />
+          ) : (
+            <NowPlaying card={currentCard} compact />
+          );
+      } else if (canChallenge && isActiveP) {
+        aboveEl = <DraggableMystery card={currentCard} />;
+      }
+    }
     return (
       <div key={p.id} className="space-y-1.5">
         <div className="flex items-center gap-2">
@@ -237,7 +249,7 @@ export default function Game() {
             {p.tokens}
           </span>
         </div>
-        {mysteryHere && <DraggableMystery card={currentCard} />}
+        {aboveEl}
         <Timeline timeline={p.timeline} {...props} />
 
         {isMyTurn && isActiveP && isPlaying && (
