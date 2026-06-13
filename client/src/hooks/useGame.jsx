@@ -94,6 +94,10 @@ export function GameProvider({ children }) {
     socket.emit('place_challenge', { roomCode, position });
   }, [roomCode]);
 
+  const passChallenge = useCallback(() => {
+    socket.emit('pass_challenge', { roomCode });
+  }, [roomCode]);
+
   const nextTurn = useCallback(() => {
     socket.emit('next_turn', { roomCode });
   }, [roomCode]);
@@ -121,6 +125,7 @@ export function GameProvider({ children }) {
         lockPlacement,
         skipCard,
         placeChallenge,
+        passChallenge,
         nextTurn,
       }}
     >

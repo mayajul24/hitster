@@ -33,6 +33,7 @@ export default function Game() {
     lockPlacement,
     skipCard,
     placeChallenge,
+    passChallenge,
     nextTurn,
   } = useGame();
   const { getToken } = useSpotify();
@@ -142,15 +143,22 @@ export default function Game() {
     );
   }
 
-  const { currentCard, currentPlayerId, activePlayerPlacement, challenges = {}, players } = gameState;
+  const { currentCard, currentPlayerId, activePlayerPlacement, challenges = {}, passes = {}, players } =
+    gameState;
   const activePlayer = players.find((p) => p.id === currentPlayerId);
   const isRevealing = phase === 'revealing';
   const isPlaced = phase === 'placed';
   const isPlaying = phase === 'playing';
 
   const myChallenge = challenges[mySocketId];
+  const myPass = passes[mySocketId];
   const canChallenge =
-    !isMyTurn && isPlaced && challengeSecs > 0 && (myPlayer?.tokens ?? 0) > 0 && !myChallenge;
+    !isMyTurn &&
+    isPlaced &&
+    challengeSecs > 0 &&
+    (myPlayer?.tokens ?? 0) > 0 &&
+    !myChallenge &&
+    !myPass;
   const iAmDragger = (isMyTurn && isPlaying) || canChallenge;
 
   const challengerMarkers = Object.entries(challenges).map(([pid, ch]) => ({
@@ -208,6 +216,7 @@ export default function Game() {
       if (isMyTurn) return `Locked! Others can challenge — revealing in ${challengeSecs}s`;
       if (canChallenge) return `Challenge! Drag onto a different spot — ${challengeSecs}s`;
       if (myChallenge) return `Challenge placed — revealing in ${challengeSecs}s`;
+      if (myPass) return `You passed — revealing in ${challengeSecs}s`;
       return `${activePlayer?.name} locked their guess — revealing in ${challengeSecs}s`;
     }
     return null;
@@ -339,9 +348,19 @@ export default function Game() {
           </button>
         )}
 
-        {!isRevealing && isPlaced && (
+        {!isRevealing && isPlaced && canChallenge && (
+          <button
+            onClick={passChallenge}
+            className="w-full bg-white/10 text-white/80 font-semibold py-3 rounded-2xl active:opacity-80"
+          >
+            Don't challenge · skip the wait
+          </button>
+        )}
+
+        {!isRevealing && isPlaced && !canChallenge && (
           <p className="text-center text-white/60 text-sm py-3">
-            Revealing in <span className="text-hitster-yellow font-bold text-lg">{challengeSecs}</span>s
+            {myPass ? 'You passed — revealing in ' : 'Revealing in '}
+            <span className="text-hitster-yellow font-bold text-lg">{challengeSecs}</span>s
           </p>
         )}
 

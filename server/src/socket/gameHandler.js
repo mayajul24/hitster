@@ -13,6 +13,35 @@ module.exports = function gameHandler(io, socket) {
     return rooms.get(typeof code === 'string' ? code.toUpperCase() : '');
   }
 
+  function revealNow(room) {
+    if (room._revealTimer) {
+      clearTimeout(room._revealTimer);
+      room._revealTimer = null;
+    }
+    if (room.phase !== 'placed') return;
+    try {
+      const { year, outcomes } = room.reveal();
+      io.to(room.code).emit('revealed', {
+        year,
+        outcomes,
+        card: room.currentCard,
+        state: room.publicState(),
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function scheduleReveal(room) {
+    const code = room.code;
+    const delay = Math.max(0, (room.challengeDeadline || Date.now()) - Date.now());
+    if (room._revealTimer) clearTimeout(room._revealTimer);
+    room._revealTimer = setTimeout(() => {
+      const r = rooms.get(code);
+      if (r) revealNow(r);
+    }, delay);
+  }
+
   socket.on('create_room', ({ playerName, spotifyId }) => {
     const room = new GameRoom(socket.id, playerName, spotifyId);
     rooms.set(room.code, room);
@@ -59,26 +88,9 @@ module.exports = function gameHandler(io, socket) {
     try {
       room.lockPlacement(socket.id, position, { name, artist });
       broadcast(room.code, 'state_update', { state: room.publicState() });
-
-      // Auto-reveal when the challenge window closes
-      const code = room.code;
-      const delay = Math.max(0, (room.challengeDeadline || Date.now()) - Date.now());
-      if (room._revealTimer) clearTimeout(room._revealTimer);
-      room._revealTimer = setTimeout(() => {
-        const r = rooms.get(code);
-        if (!r || r.phase !== 'placed') return;
-        try {
-          const { year, outcomes } = r.reveal();
-          io.to(code).emit('revealed', {
-            year,
-            outcomes,
-            card: r.currentCard,
-            state: r.publicState(),
-          });
-        } catch (e) {
-          /* state changed before the timer fired — ignore */
-        }
-      }, delay);
+      // Reveal right away if no one can challenge; otherwise run the window
+      if (room.allChallengesIn()) revealNow(room);
+      else scheduleReveal(room);
     } catch (e) {
       emit('error', { message: e.message });
     }
@@ -101,6 +113,19 @@ module.exports = function gameHandler(io, socket) {
     try {
       room.placeChallenge(socket.id, position);
       broadcast(room.code, 'state_update', { state: room.publicState() });
+      if (room.allChallengesIn()) revealNow(room);
+    } catch (e) {
+      emit('error', { message: e.message });
+    }
+  });
+
+  socket.on('pass_challenge', ({ roomCode }) => {
+    const room = getRoom(roomCode);
+    if (!room) return emit('error', { message: 'Room not found' });
+    try {
+      room.passChallenge(socket.id);
+      broadcast(room.code, 'state_update', { state: room.publicState() });
+      if (room.allChallengesIn()) revealNow(room);
     } catch (e) {
       emit('error', { message: e.message });
     }

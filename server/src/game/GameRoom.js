@@ -10,6 +10,7 @@ class GameRoom {
     this.currentCard = null;
     this.currentPlayerIndex = 0;
     this.challenges = {}; // { socketId: { position } }
+    this.passes = {}; // { socketId: true } — players who declined to challenge
     this.activePlayerPlacement = null;
     this.activeGuess = null; // { name, artist } submitted on lock
     this.challengeDeadline = null; // epoch ms until challenges are open
@@ -108,6 +109,7 @@ class GameRoom {
     }
     this.currentCard = this.deck.pop();
     this.challenges = {};
+    this.passes = {};
     this.activePlayerPlacement = null;
     this.activeGuess = null;
     this.challengeDeadline = null;
@@ -163,6 +165,23 @@ class GameRoom {
 
     player.tokens--;
     this.challenges[playerId] = { position };
+  }
+
+  passChallenge(playerId) {
+    if (this.phase !== 'placed') throw new Error('No challenge open right now');
+    if (this.getCurrentPlayer()?.id === playerId) throw new Error("It's your turn");
+    if (this.challenges[playerId]) throw new Error('You already challenged');
+    this.passes[playerId] = true;
+  }
+
+  // True once every non-active player who could still challenge has decided
+  // (challenged or passed), so the window can close early.
+  allChallengesIn() {
+    if (this.phase !== 'placed') return false;
+    const activeId = this.getCurrentPlayer()?.id;
+    return this.players
+      .filter((p) => p.id !== activeId && p.tokens > 0 && !this.challenges[p.id])
+      .every((p) => this.passes[p.id]);
   }
 
   reveal() {
@@ -295,6 +314,7 @@ class GameRoom {
         : null,
       activePlayerPlacement: this.activePlayerPlacement,
       challenges: this.challenges,
+      passes: this.passes,
       challengeDeadline: this.challengeDeadline,
       players: this.players.map((p) => ({
         id: p.id,
