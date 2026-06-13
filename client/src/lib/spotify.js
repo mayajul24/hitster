@@ -125,7 +125,7 @@ export async function getUserPlaylists(token) {
 
 export async function getPlaylistTracks(playlistId, token) {
   const tracks = [];
-  let url = `/playlists/${playlistId}/tracks?limit=50&fields=next,items(track(id,name,artists,album(release_date,images),uri))`;
+  let url = `/playlists/${playlistId}/tracks?limit=50&fields=next,items(track(id,name,artists,album(release_date,images),uri,external_ids))`;
   while (url) {
     const data = await apiFetch(url, token);
     for (const item of data.items) {
@@ -139,6 +139,7 @@ export async function getPlaylistTracks(playlistId, token) {
         artist: t.artists.map((a) => a.name).join(', '),
         year,
         uri: t.uri,
+        isrc: t.external_ids?.isrc || null,
         albumArt: t.album.images[0]?.url || null,
       });
     }

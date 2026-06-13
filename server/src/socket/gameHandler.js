@@ -1,6 +1,29 @@
 const GameRoom = require('../game/GameRoom');
+const mb = require('../lib/musicbrainz');
 
 const rooms = new Map(); // code -> GameRoom
+
+// Correct a card's year to the song's original release year (await before it matters).
+async function applyYear(card) {
+  if (!card) return;
+  card.year = await mb.lookupYear({
+    isrc: card.isrc,
+    trackName: card.trackName,
+    artist: card.artist,
+    fallbackYear: card.year,
+  });
+}
+
+// Fire-and-forget lookup so the result is cached before the card is revealed.
+function prewarm(card) {
+  if (!card) return;
+  mb.lookupYear({
+    isrc: card.isrc,
+    trackName: card.trackName,
+    artist: card.artist,
+    fallbackYear: card.year,
+  }).catch(() => {});
+}
 
 module.exports = function gameHandler(io, socket) {
   function emit(event, data) {
@@ -13,12 +36,15 @@ module.exports = function gameHandler(io, socket) {
     return rooms.get(typeof code === 'string' ? code.toUpperCase() : '');
   }
 
-  function revealNow(room) {
+  async function revealNow(room) {
     if (room._revealTimer) {
       clearTimeout(room._revealTimer);
       room._revealTimer = null;
     }
     if (room.phase !== 'placed') return;
+    // Make sure the mystery card carries its true original year before scoring
+    await applyYear(room.currentCard);
+    if (room.phase !== 'placed') return; // state may have changed while awaiting
     try {
       const { year, outcomes } = room.reveal();
       io.to(room.code).emit('revealed', {
@@ -70,12 +96,15 @@ module.exports = function gameHandler(io, socket) {
     broadcast(room.code, 'state_update', { state: room.publicState() });
   });
 
-  socket.on('start_game', ({ roomCode }) => {
+  socket.on('start_game', async ({ roomCode }) => {
     const room = getRoom(roomCode);
     if (!room) return emit('error', { message: 'Room not found' });
     if (room.hostId !== socket.id) return emit('error', { message: 'Not the host' });
     try {
       room.startGame();
+      // Starting cards are shown with their year immediately, so correct them now
+      await Promise.all(room.players.map((p) => applyYear(p.timeline[0])));
+      prewarm(room.currentCard); // first mystery — ready by reveal time
       broadcast(room.code, 'game_started', { state: room.publicState() });
     } catch (e) {
       emit('error', { message: e.message });
@@ -101,6 +130,7 @@ module.exports = function gameHandler(io, socket) {
     if (!room) return emit('error', { message: 'Room not found' });
     try {
       room.skipCard(socket.id);
+      prewarm(room.currentCard);
       broadcast(room.code, 'state_update', { state: room.publicState() });
     } catch (e) {
       emit('error', { message: e.message });
@@ -142,6 +172,7 @@ module.exports = function gameHandler(io, socket) {
       broadcast(room.code, 'game_over', { winner, state: room.publicState() });
       rooms.delete(room.code);
     } else {
+      prewarm(room.currentCard);
       broadcast(room.code, 'turn_started', { state: room.publicState() });
     }
   });
