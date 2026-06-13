@@ -77,8 +77,13 @@ export function GameProvider({ children }) {
     socket.emit('start_game', { roomCode });
   }, [roomCode]);
 
-  const placeCard = useCallback((position) => {
-    socket.emit('place_card', { roomCode, position });
+  const lockPlacement = useCallback((position, guess = {}) => {
+    socket.emit('lock_placement', {
+      roomCode,
+      position,
+      name: guess.name,
+      artist: guess.artist,
+    });
   }, [roomCode]);
 
   const skipCard = useCallback(() => {
@@ -87,10 +92,6 @@ export function GameProvider({ children }) {
 
   const placeChallenge = useCallback((position) => {
     socket.emit('place_challenge', { roomCode, position });
-  }, [roomCode]);
-
-  const reveal = useCallback((guess = {}) => {
-    socket.emit('reveal', { roomCode, name: guess.name, artist: guess.artist });
   }, [roomCode]);
 
   const nextTurn = useCallback(() => {
@@ -117,10 +118,9 @@ export function GameProvider({ children }) {
         joinRoom,
         setPlaylist,
         startGame,
-        placeCard,
+        lockPlacement,
         skipCard,
         placeChallenge,
-        reveal,
         nextTurn,
       }}
     >

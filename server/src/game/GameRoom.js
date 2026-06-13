@@ -11,6 +11,7 @@ class GameRoom {
     this.currentPlayerIndex = 0;
     this.challenges = {}; // { socketId: { position } }
     this.activePlayerPlacement = null;
+    this.activeGuess = null; // { name, artist } submitted on lock
     this.challengeDeadline = null; // epoch ms until challenges are open
     this.playlistName = '';
   }
@@ -101,9 +102,14 @@ class GameRoom {
       this.phase = 'ended';
       return;
     }
+    if (this._revealTimer) {
+      clearTimeout(this._revealTimer);
+      this._revealTimer = null;
+    }
     this.currentCard = this.deck.pop();
     this.challenges = {};
     this.activePlayerPlacement = null;
+    this.activeGuess = null;
     this.challengeDeadline = null;
     this.phase = 'playing';
   }
@@ -118,10 +124,14 @@ class GameRoom {
     return this.players[this.currentPlayerIndex] || null;
   }
 
-  placeCard(playerId, position) {
+  // Active player commits their placement (and optional name/artist guess).
+  // Until this is called they can re-place freely with no time pressure.
+  lockPlacement(playerId, position, guess = {}) {
     if (this.getCurrentPlayer()?.id !== playerId) throw new Error('Not your turn');
-    if (this.phase !== 'playing') throw new Error('Cannot place now');
+    if (this.phase !== 'playing') throw new Error('Already locked in');
+    if (position == null) throw new Error('Place the card first');
     this.activePlayerPlacement = position;
+    this.activeGuess = { name: (guess.name || '').trim(), artist: (guess.artist || '').trim() };
     this.phase = 'placed';
     // Open the challenge window
     this.challengeDeadline = Date.now() + CHALLENGE_WINDOW_MS;
@@ -155,11 +165,9 @@ class GameRoom {
     this.challenges[playerId] = { position };
   }
 
-  reveal(guess = {}) {
+  reveal() {
     if (this.activePlayerPlacement === null) throw new Error('Place the card first');
     if (this.phase !== 'placed') throw new Error('Nothing to reveal');
-    if (this.challengeDeadline && Date.now() < this.challengeDeadline)
-      throw new Error('Challenge window is still open');
 
     const { year } = this.currentCard;
     const activePlayer = this.getCurrentPlayer();
@@ -167,8 +175,10 @@ class GameRoom {
     const activeCorrect = this._checkPosition(activeTimeline, this.activePlayerPlacement, year);
 
     // Bonus token: active player named both the song title AND artist
-    const guessName = (guess.name || '').trim();
-    const guessArtist = (guess.artist || '').trim();
+    const g = this.activeGuess || {};
+    const guessName = (g.name || '').trim();
+    const guessArtist = (g.artist || '').trim();
+    const guessed = !!guessName || !!guessArtist;
     const named =
       !!guessName &&
       !!guessArtist &&
@@ -182,6 +192,7 @@ class GameRoom {
         role: 'active',
         correct: activeCorrect,
         wonCard: activeCorrect,
+        guessed,
         named,
       },
     ];

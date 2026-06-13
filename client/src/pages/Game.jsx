@@ -30,16 +30,16 @@ export default function Game() {
     revealData,
     gameOver,
     error,
-    placeCard,
+    lockPlacement,
     skipCard,
     placeChallenge,
-    reveal,
     nextTurn,
   } = useGame();
   const { getToken } = useSpotify();
   const navigate = useNavigate();
 
   const [challengeSecs, setChallengeSecs] = useState(0);
+  const [myPlacement, setMyPlacement] = useState(null); // tentative slot before locking
   const [guessName, setGuessName] = useState('');
   const [guessArtist, setGuessArtist] = useState('');
 
@@ -66,13 +66,14 @@ export default function Game() {
     })();
   }, [trackId]);
 
-  // Reset the bonus name/artist guess each new card
+  // Reset per-card local state
   useEffect(() => {
+    setMyPlacement(null);
     setGuessName('');
     setGuessArtist('');
   }, [trackId]);
 
-  // Countdown for the challenge window (after a placement, before reveal)
+  // Challenge-window countdown (display only — the server triggers the reveal)
   useEffect(() => {
     if (phase !== 'placed' || !challengeDeadline) {
       setChallengeSecs(0);
@@ -94,13 +95,6 @@ export default function Game() {
       } catch {}
     })();
   }, [gameOver]);
-
-  const handleDragEnd = ({ over }) => {
-    if (!over || typeof over.id !== 'string' || !over.id.startsWith('slot-')) return;
-    const pos = parseInt(over.id.slice(5), 10);
-    if (isMyTurn) placeCard(pos);
-    else placeChallenge(pos);
-  };
 
   if (gameOver) {
     const abandoned = gameOver.reason === 'abandoned';
@@ -150,7 +144,6 @@ export default function Game() {
 
   const { currentCard, currentPlayerId, activePlayerPlacement, challenges = {}, players } = gameState;
   const activePlayer = players.find((p) => p.id === currentPlayerId);
-  const myTimeline = myPlayer?.timeline || [];
   const isRevealing = phase === 'revealing';
   const isPlaced = phase === 'placed';
   const isPlaying = phase === 'playing';
@@ -158,13 +151,124 @@ export default function Game() {
   const myChallenge = challenges[mySocketId];
   const canChallenge =
     !isMyTurn && isPlaced && challengeSecs > 0 && (myPlayer?.tokens ?? 0) > 0 && !myChallenge;
+  const iAmDragger = (isMyTurn && isPlaying) || canChallenge;
 
-  // Markers placed on the active player's timeline (their guess + challengers)
   const challengerMarkers = Object.entries(challenges).map(([pid, ch]) => ({
     position: ch.position,
     kind: pid === mySocketId ? 'me' : 'other',
     label: pid === mySocketId ? 'You' : players.find((p) => p.id === pid)?.name || '?',
   }));
+
+  const handleDragEnd = ({ over }) => {
+    if (!over || typeof over.id !== 'string' || !over.id.startsWith('slot-')) return;
+    const pos = parseInt(over.id.slice(5), 10);
+    if (isMyTurn && isPlaying) setMyPlacement(pos);
+    else if (canChallenge) placeChallenge(pos);
+  };
+
+  const lockIn = () => {
+    if (myPlacement == null) return;
+    lockPlacement(myPlacement, { name: guessName, artist: guessArtist });
+  };
+
+  const timelineProps = (p) => {
+    const isActiveP = p.id === currentPlayerId;
+    if (isMyTurn && isActiveP && isPlaying) {
+      return {
+        onPlace: (pos) => setMyPlacement(pos),
+        droppablePositions: range(p.timeline.length + 1).filter((s) => s !== myPlacement),
+        markers: myPlacement != null ? [{ position: myPlacement, kind: 'mystery', label: 'Here' }] : [],
+      };
+    }
+    if (isActiveP && isPlaced) {
+      const markers = [
+        { position: activePlayerPlacement, kind: 'active', label: isMyTurn ? 'You' : 'Their guess' },
+        ...challengerMarkers,
+      ];
+      if (canChallenge) {
+        return {
+          onPlace: (pos) => placeChallenge(pos),
+          droppablePositions: range(p.timeline.length + 1).filter((s) => s !== activePlayerPlacement),
+          markers,
+        };
+      }
+      return { markers };
+    }
+    return {};
+  };
+
+  const statusText = () => {
+    if (isRevealing) return null;
+    if (isPlaying)
+      return isMyTurn
+        ? 'Your turn — drag the song onto your timeline, take your time, then lock it in.'
+        : `${activePlayer?.name} is placing the song…`;
+    if (isPlaced) {
+      if (isMyTurn) return `Locked! Others can challenge — revealing in ${challengeSecs}s`;
+      if (canChallenge) return `Challenge! Drag onto a different spot — ${challengeSecs}s`;
+      if (myChallenge) return `Challenge placed — revealing in ${challengeSecs}s`;
+      return `${activePlayer?.name} locked their guess — revealing in ${challengeSecs}s`;
+    }
+    return null;
+  };
+
+  const renderBlock = (p) => {
+    const isActiveP = p.id === currentPlayerId;
+    const props = timelineProps(p);
+    const mysteryHere =
+      !isRevealing &&
+      currentCard &&
+      iAmDragger &&
+      ((isMyTurn && isActiveP && isPlaying) || (canChallenge && isActiveP));
+    return (
+      <div key={p.id} className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${isActiveP ? 'text-hitster-yellow' : 'text-white'}`}>
+            {p.id === mySocketId ? 'You' : p.name}
+          </span>
+          {isActiveP && (
+            <span className="text-[10px] bg-hitster-yellow text-black px-1.5 py-0.5 rounded-full font-bold">
+              TURN
+            </span>
+          )}
+          <span className="text-white/30 text-xs flex items-center gap-1">
+            {p.timeline.length} cards
+            <span className="w-2 h-2 rounded-full bg-hitster-yellow inline-block ml-1" />
+            {p.tokens}
+          </span>
+        </div>
+        {mysteryHere && <DraggableMystery card={currentCard} />}
+        <Timeline timeline={p.timeline} {...props} />
+
+        {isMyTurn && isActiveP && isPlaying && (
+          <div className="space-y-2 pt-1">
+            <p className="text-white/40 text-xs">Bonus — name the song &amp; artist for a token</p>
+            <input
+              value={guessName}
+              onChange={(e) => setGuessName(e.target.value)}
+              placeholder="Song name"
+              className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
+            />
+            <input
+              value={guessArtist}
+              onChange={(e) => setGuessArtist(e.target.value)}
+              placeholder="Artist"
+              className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
+            />
+            <button
+              onClick={skipCard}
+              disabled={(myPlayer?.tokens ?? 0) <= 0}
+              className="w-full bg-white/10 text-white/80 text-sm font-semibold py-2.5 rounded-xl active:opacity-80 disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              Skip this song
+              <span className="w-2.5 h-2.5 rounded-full bg-hitster-yellow inline-block" />
+              <span className="text-white/50">1 token · {myPlayer?.tokens ?? 0} left</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-hitster-dark flex flex-col">
@@ -177,146 +281,29 @@ export default function Game() {
 
         <PlayerList players={players} currentPlayerId={currentPlayerId} myId={mySocketId} />
 
-        {/* ===== REVEAL ===== */}
+        {/* Audio control for players who aren't currently dragging the mystery */}
+        {currentCard && !isRevealing && !iAmDragger && <NowPlaying card={currentCard} />}
+
+        {!isRevealing && (
+          <p className="text-white/60 text-sm text-center">{statusText()}</p>
+        )}
+
         {isRevealing && revealData && (
-          <>
-            <RevealResult revealData={revealData} players={players} />
-            {myTimeline.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-white/50 text-xs uppercase tracking-wider">Your timeline</p>
-                <Timeline timeline={myTimeline} />
-              </div>
-            )}
-          </>
+          <RevealResult revealData={revealData} players={players} />
         )}
 
-        {/* ===== ACTIVE PLAYER ===== */}
-        {isMyTurn && !isRevealing && (
+        {/* All players' timelines, always visible */}
+        {!isRevealing ? (
           <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
-            <div className="space-y-3">
-              {currentCard &&
-                (isPlaying ? (
-                  <DraggableMystery card={currentCard} />
-                ) : (
-                  <NowPlaying card={currentCard} />
-                ))}
-              <p className="text-white/50 text-xs uppercase tracking-wider">
-                {isPlaced
-                  ? challengeSecs > 0
-                    ? `Locked in — others can challenge for ${challengeSecs}s`
-                    : 'Locked in — tap Reveal Year'
-                  : 'Drag the Mystery Song onto your timeline (or tap a slot)'}
-              </p>
-              <Timeline
-                timeline={myTimeline}
-                onPlace={isPlaying ? placeCard : undefined}
-                droppablePositions={isPlaying ? range(myTimeline.length + 1) : null}
-                markers={
-                  isPlaced
-                    ? [{ position: activePlayerPlacement, kind: 'mystery', label: 'You' }, ...challengerMarkers]
-                    : []
-                }
-              />
-              {isPlaced && (
-                <div className="space-y-2">
-                  <p className="text-white/50 text-xs uppercase tracking-wider">
-                    Bonus — name the song &amp; artist for a token
-                  </p>
-                  <input
-                    value={guessName}
-                    onChange={(e) => setGuessName(e.target.value)}
-                    placeholder="Song name"
-                    className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
-                  />
-                  <input
-                    value={guessArtist}
-                    onChange={(e) => setGuessArtist(e.target.value)}
-                    placeholder="Artist"
-                    className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
-                  />
-                </div>
-              )}
-
-              {isPlaying && (
-                <button
-                  onClick={skipCard}
-                  disabled={!myPlayer || myPlayer.tokens <= 0}
-                  className="w-full bg-white/10 text-white/80 text-sm font-semibold py-2.5 rounded-xl active:opacity-80 disabled:opacity-40 flex items-center justify-center gap-2"
-                >
-                  Skip this song
-                  <span className="w-2.5 h-2.5 rounded-full bg-hitster-yellow inline-block" />
-                  <span className="text-white/50">1 token · {myPlayer?.tokens ?? 0} left</span>
-                </button>
-              )}
-            </div>
+            <div className="space-y-4">{players.map(renderBlock)}</div>
           </DndContext>
-        )}
-
-        {/* ===== OTHER PLAYERS ===== */}
-        {!isMyTurn && !isRevealing && activePlayer && (
-          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
-            <div className="space-y-3">
-              {currentCard &&
-                (canChallenge ? (
-                  <DraggableMystery card={currentCard} />
-                ) : (
-                  <NowPlaying card={currentCard} />
-                ))}
-
-              <p className="text-white/50 text-xs uppercase tracking-wider">
-                {isPlaying
-                  ? `${activePlayer.name} is placing the song…`
-                  : canChallenge
-                  ? `Challenge! Drag onto a different spot — ${challengeSecs}s`
-                  : myChallenge
-                  ? `Challenge placed — revealing in ${challengeSecs}s`
-                  : (myPlayer?.tokens ?? 0) <= 0
-                  ? `No tokens to challenge — ${challengeSecs}s`
-                  : `${activePlayer.name}'s guess is locked — ${challengeSecs}s`}
-              </p>
-
-              <p className="text-white/40 text-xs">{activePlayer.name}'s timeline</p>
-              <Timeline
-                timeline={activePlayer.timeline}
-                onPlace={canChallenge ? placeChallenge : undefined}
-                droppablePositions={
-                  canChallenge
-                    ? range(activePlayer.timeline.length + 1).filter((p) => p !== activePlayerPlacement)
-                    : null
-                }
-                markers={
-                  isPlaced
-                    ? [
-                        { position: activePlayerPlacement, kind: 'active', label: 'Their guess' },
-                        ...challengerMarkers,
-                      ]
-                    : []
-                }
-              />
-
-              {myTimeline.length > 0 && (
-                <div className="pt-1">
-                  <p className="text-white/40 text-xs mb-1">Your timeline</p>
-                  <Timeline timeline={myTimeline} />
-                </div>
-              )}
-            </div>
-          </DndContext>
+        ) : (
+          <div className="space-y-4">{players.map(renderBlock)}</div>
         )}
       </div>
 
       {/* Bottom action bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-hitster-dark border-t border-white/10 p-4 safe-bottom">
-        {isMyTurn && isPlaced && !isRevealing && (
-          <button
-            onClick={() => reveal({ name: guessName, artist: guessArtist })}
-            disabled={challengeSecs > 0}
-            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80 disabled:opacity-40"
-          >
-            {challengeSecs > 0 ? `Reveal in ${challengeSecs}s` : 'Reveal Year'}
-          </button>
-        )}
-
         {isRevealing && (isMyTurn || isHost) && (
           <button
             onClick={nextTurn}
@@ -330,11 +317,23 @@ export default function Game() {
           <p className="text-center text-white/40 text-sm py-3">Waiting for next turn…</p>
         )}
 
-        {isMyTurn && isPlaying && (
-          <p className="text-center text-white/40 text-sm py-3">Drag the song onto your timeline</p>
+        {!isRevealing && isMyTurn && isPlaying && (
+          <button
+            onClick={lockIn}
+            disabled={myPlacement == null}
+            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80 disabled:opacity-40"
+          >
+            {myPlacement == null ? 'Place the song first' : 'Lock it in'}
+          </button>
         )}
 
-        {!isMyTurn && !isRevealing && (
+        {!isRevealing && isPlaced && (
+          <p className="text-center text-white/60 text-sm py-3">
+            Revealing in <span className="text-hitster-yellow font-bold text-lg">{challengeSecs}</span>s
+          </p>
+        )}
+
+        {!isRevealing && !isMyTurn && isPlaying && (
           <p className="text-center text-white/40 text-sm py-3">{activePlayer?.name}'s turn</p>
         )}
       </div>

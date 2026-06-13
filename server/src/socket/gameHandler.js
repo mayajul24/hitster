@@ -53,12 +53,32 @@ module.exports = function gameHandler(io, socket) {
     }
   });
 
-  socket.on('place_card', ({ roomCode, position }) => {
+  socket.on('lock_placement', ({ roomCode, position, name, artist }) => {
     const room = getRoom(roomCode);
     if (!room) return emit('error', { message: 'Room not found' });
     try {
-      room.placeCard(socket.id, position);
+      room.lockPlacement(socket.id, position, { name, artist });
       broadcast(room.code, 'state_update', { state: room.publicState() });
+
+      // Auto-reveal when the challenge window closes
+      const code = room.code;
+      const delay = Math.max(0, (room.challengeDeadline || Date.now()) - Date.now());
+      if (room._revealTimer) clearTimeout(room._revealTimer);
+      room._revealTimer = setTimeout(() => {
+        const r = rooms.get(code);
+        if (!r || r.phase !== 'placed') return;
+        try {
+          const { year, outcomes } = r.reveal();
+          io.to(code).emit('revealed', {
+            year,
+            outcomes,
+            card: r.currentCard,
+            state: r.publicState(),
+          });
+        } catch (e) {
+          /* state changed before the timer fired — ignore */
+        }
+      }, delay);
     } catch (e) {
       emit('error', { message: e.message });
     }
@@ -81,24 +101,6 @@ module.exports = function gameHandler(io, socket) {
     try {
       room.placeChallenge(socket.id, position);
       broadcast(room.code, 'state_update', { state: room.publicState() });
-    } catch (e) {
-      emit('error', { message: e.message });
-    }
-  });
-
-  socket.on('reveal', ({ roomCode, name, artist }) => {
-    const room = getRoom(roomCode);
-    if (!room) return emit('error', { message: 'Room not found' });
-    if (room.getCurrentPlayer()?.id !== socket.id)
-      return emit('error', { message: 'Not your turn' });
-    try {
-      const { year, outcomes } = room.reveal({ name, artist });
-      broadcast(room.code, 'revealed', {
-        year,
-        outcomes,
-        card: room.currentCard,
-        state: room.publicState(),
-      });
     } catch (e) {
       emit('error', { message: e.message });
     }

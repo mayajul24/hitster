@@ -5,10 +5,9 @@ export default function RevealResult({ revealData, players }) {
 
   const labelFor = (o) => {
     if (o.role === 'active') {
-      const bonus = o.named ? ' · named it +1 token' : '';
       return o.correct
-        ? { t: `Correct! +1 card${bonus}`, c: 'text-[#1DB954]' }
-        : { t: `Wrong${o.named ? ' · named it +1 token' : ''}`, c: o.named ? 'text-[#1DB954]' : 'text-hitster-accent' };
+        ? { t: 'Correct! +1 card', c: 'text-[#1DB954]' }
+        : { t: 'Wrong', c: 'text-hitster-accent' };
     }
     if (o.correct) {
       return o.refunded
@@ -16,6 +15,14 @@ export default function RevealResult({ revealData, players }) {
         : { t: 'Challenge won! +1 card', c: 'text-[#1DB954]' };
     }
     return { t: 'Challenge failed', c: 'text-hitster-accent' };
+  };
+
+  // Naming sub-result for the active player (shown whether right or wrong)
+  const nameNote = (o) => {
+    if (o.role !== 'active' || !o.guessed) return null;
+    return o.named
+      ? { t: 'Named it · +1 token', c: 'text-[#1DB954]' }
+      : { t: 'Name/artist missed', c: 'text-white/40' };
   };
 
   return (
@@ -34,6 +41,7 @@ export default function RevealResult({ revealData, players }) {
       <div className="space-y-2">
         {outcomes.map((o) => {
           const l = labelFor(o);
+          const note = nameNote(o);
           return (
             <div
               key={o.playerId}
@@ -43,7 +51,10 @@ export default function RevealResult({ revealData, players }) {
                 {nameOf(o.playerId)}
                 {o.role === 'active' && <span className="text-white/40 text-xs"> · turn</span>}
               </span>
-              <span className={`text-sm font-semibold ${l.c}`}>{l.t}</span>
+              <span className="text-right">
+                <span className={`block text-sm font-semibold ${l.c}`}>{l.t}</span>
+                {note && <span className={`block text-xs ${note.c}`}>{note.t}</span>}
+              </span>
             </div>
           );
         })}
