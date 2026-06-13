@@ -39,7 +39,6 @@ export default function Game() {
   const { getToken } = useSpotify();
   const navigate = useNavigate();
 
-  const [countdown, setCountdown] = useState(null);
   const [challengeSecs, setChallengeSecs] = useState(0);
   const [guessName, setGuessName] = useState('');
   const [guessArtist, setGuessArtist] = useState('');
@@ -85,21 +84,6 @@ export default function Game() {
     const iv = setInterval(update, 250);
     return () => clearInterval(iv);
   }, [phase, challengeDeadline]);
-
-  // After a reveal, auto-advance to the next turn with a 3..2..1 countdown.
-  useEffect(() => {
-    if (phase !== 'revealing') {
-      setCountdown(null);
-      return;
-    }
-    setCountdown(3);
-    const tick = setInterval(() => setCountdown((c) => (c > 1 ? c - 1 : 0)), 1000);
-    const advance = isHost ? setTimeout(() => nextTurn(), 3000) : null;
-    return () => {
-      clearInterval(tick);
-      if (advance) clearTimeout(advance);
-    };
-  }, [phase, trackId, isHost]);
 
   // Stop Spotify when the game ends
   useEffect(() => {
@@ -333,10 +317,17 @@ export default function Game() {
           </button>
         )}
 
-        {isRevealing && (
-          <p className="text-center text-white/60 text-sm py-3">
-            Next round in <span className="text-hitster-yellow font-bold text-lg">{countdown ?? 3}</span>…
-          </p>
+        {isRevealing && (isMyTurn || isHost) && (
+          <button
+            onClick={nextTurn}
+            className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80"
+          >
+            Next Turn
+          </button>
+        )}
+
+        {isRevealing && !isMyTurn && !isHost && (
+          <p className="text-center text-white/40 text-sm py-3">Waiting for next turn…</p>
         )}
 
         {isMyTurn && isPlaying && (
