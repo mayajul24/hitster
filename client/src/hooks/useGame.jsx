@@ -89,8 +89,8 @@ export function GameProvider({ children }) {
     socket.emit('place_challenge', { roomCode, position });
   }, [roomCode]);
 
-  const reveal = useCallback(() => {
-    socket.emit('reveal', { roomCode });
+  const reveal = useCallback((guess = {}) => {
+    socket.emit('reveal', { roomCode, name: guess.name, artist: guess.artist });
   }, [roomCode]);
 
   const nextTurn = useCallback(() => {

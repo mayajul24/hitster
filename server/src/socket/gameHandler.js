@@ -86,13 +86,13 @@ module.exports = function gameHandler(io, socket) {
     }
   });
 
-  socket.on('reveal', ({ roomCode }) => {
+  socket.on('reveal', ({ roomCode, name, artist }) => {
     const room = getRoom(roomCode);
     if (!room) return emit('error', { message: 'Room not found' });
     if (room.getCurrentPlayer()?.id !== socket.id)
       return emit('error', { message: 'Not your turn' });
     try {
-      const { year, outcomes } = room.reveal();
+      const { year, outcomes } = room.reveal({ name, artist });
       broadcast(room.code, 'revealed', {
         year,
         outcomes,

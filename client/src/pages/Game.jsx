@@ -41,6 +41,8 @@ export default function Game() {
 
   const [countdown, setCountdown] = useState(null);
   const [challengeSecs, setChallengeSecs] = useState(0);
+  const [guessName, setGuessName] = useState('');
+  const [guessArtist, setGuessArtist] = useState('');
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -63,6 +65,12 @@ export default function Game() {
         if (active) await playTrack(uri, token, active.id);
       } catch {}
     })();
+  }, [trackId]);
+
+  // Reset the bonus name/artist guess each new card
+  useEffect(() => {
+    setGuessName('');
+    setGuessArtist('');
   }, [trackId]);
 
   // Countdown for the challenge window (after a placement, before reveal)
@@ -225,6 +233,26 @@ export default function Game() {
                     : []
                 }
               />
+              {isPlaced && (
+                <div className="space-y-2">
+                  <p className="text-white/50 text-xs uppercase tracking-wider">
+                    Bonus — name the song &amp; artist for a token
+                  </p>
+                  <input
+                    value={guessName}
+                    onChange={(e) => setGuessName(e.target.value)}
+                    placeholder="Song name"
+                    className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
+                  />
+                  <input
+                    value={guessArtist}
+                    onChange={(e) => setGuessArtist(e.target.value)}
+                    placeholder="Artist"
+                    className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/30 text-sm outline-none focus:ring-2 focus:ring-hitster-yellow"
+                  />
+                </div>
+              )}
+
               {isPlaying && (
                 <button
                   onClick={skipCard}
@@ -297,7 +325,7 @@ export default function Game() {
       <div className="fixed bottom-0 left-0 right-0 bg-hitster-dark border-t border-white/10 p-4 safe-bottom">
         {isMyTurn && isPlaced && !isRevealing && (
           <button
-            onClick={reveal}
+            onClick={() => reveal({ name: guessName, artist: guessArtist })}
             disabled={challengeSecs > 0}
             className="w-full bg-hitster-yellow text-black font-bold py-4 rounded-2xl text-lg active:opacity-80 disabled:opacity-40"
           >

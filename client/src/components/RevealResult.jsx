@@ -5,9 +5,10 @@ export default function RevealResult({ revealData, players }) {
 
   const labelFor = (o) => {
     if (o.role === 'active') {
+      const bonus = o.named ? ' · named it +1 token' : '';
       return o.correct
-        ? { t: 'Correct! +1 card', c: 'text-[#1DB954]' }
-        : { t: 'Wrong', c: 'text-hitster-accent' };
+        ? { t: `Correct! +1 card${bonus}`, c: 'text-[#1DB954]' }
+        : { t: `Wrong${o.named ? ' · named it +1 token' : ''}`, c: o.named ? 'text-[#1DB954]' : 'text-hitster-accent' };
     }
     if (o.correct) {
       return o.refunded

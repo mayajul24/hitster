@@ -155,7 +155,7 @@ class GameRoom {
     this.challenges[playerId] = { position };
   }
 
-  reveal() {
+  reveal(guess = {}) {
     if (this.activePlayerPlacement === null) throw new Error('Place the card first');
     if (this.phase !== 'placed') throw new Error('Nothing to reveal');
     if (this.challengeDeadline && Date.now() < this.challengeDeadline)
@@ -166,8 +166,24 @@ class GameRoom {
     const activeTimeline = activePlayer.timeline; // unchanged until we award cards
     const activeCorrect = this._checkPosition(activeTimeline, this.activePlayerPlacement, year);
 
+    // Bonus token: active player named both the song title AND artist
+    const guessName = (guess.name || '').trim();
+    const guessArtist = (guess.artist || '').trim();
+    const named =
+      !!guessName &&
+      !!guessArtist &&
+      this._matchName(guessName, this.currentCard.trackName) &&
+      this._matchArtist(guessArtist, this.currentCard.artist);
+    if (named) activePlayer.tokens++;
+
     const outcomes = [
-      { playerId: activePlayer.id, role: 'active', correct: activeCorrect, wonCard: activeCorrect },
+      {
+        playerId: activePlayer.id,
+        role: 'active',
+        correct: activeCorrect,
+        wonCard: activeCorrect,
+        named,
+      },
     ];
     const winners = activeCorrect ? [activePlayer] : [];
 
@@ -199,6 +215,33 @@ class GameRoom {
     const before = timeline[position - 1];
     const after = timeline[position];
     return (!before || before.year <= year) && (!after || after.year >= year);
+  }
+
+  // Normalize a title/name for forgiving comparison: lowercase, strip accents,
+  // drop "(feat. ...)" / "[...]" and "- Remastered ..." suffixes and punctuation.
+  _normalize(s) {
+    return (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\(.*?\)|\[.*?\]/g, ' ')
+      .replace(/\s-\s.*$/, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
+  _matchName(guess, actual) {
+    const g = this._normalize(guess);
+    return !!g && g === this._normalize(actual);
+  }
+
+  _matchArtist(guess, actual) {
+    const g = this._normalize(guess);
+    if (!g) return false;
+    if (g === this._normalize(actual)) return true; // full "A, B, C" string
+    const parts = (actual || '').split(',').map((a) => this._normalize(a)).filter(Boolean);
+    return parts.includes(g); // any individual artist (incl. the primary one)
   }
 
   _insertCard(player, card) {
