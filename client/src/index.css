@@ -21,3 +21,37 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* --- Musical home-screen animations --- */
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(24px, -30px) scale(1.12); }
+  66% { transform: translate(-18px, 22px) scale(0.92); }
+}
+@keyframes floatNote {
+  0% { transform: translateY(10px) rotate(0deg); opacity: 0; }
+  15% { opacity: 0.5; }
+  85% { opacity: 0.35; }
+  100% { transform: translateY(-140px) rotate(18deg); opacity: 0; }
+}
+
+.animate-spin-slow { animation: spin-slow 6s linear infinite; }
+.eq-bar { transform-origin: bottom; animation: eq 0.9s ease-in-out infinite; }
+.animate-blob { animation: blob 14s ease-in-out infinite; }
+.float-note { animation: floatNote linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow,
+  .eq-bar,
+  .animate-blob,
+  .float-note {
+    animation: none !important;
+  }
+}
